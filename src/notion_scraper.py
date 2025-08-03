@@ -12,6 +12,7 @@ import re
 import json
 import time
 from typing import Dict, List, Optional, Tuple, Union
+import streamlit as st
 from fake_useragent import UserAgent
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -42,79 +43,187 @@ class NotionScraper:
         self.ua = UserAgent()
         self.driver = None
         
-    def setup_driver(self):
-        """Setup Chrome WebDriver with appropriate options."""
-        logger.info("🚀 Setting up Chrome WebDriver...")
+    def _detect_environment(self):
+        """Detect if running in Streamlit Cloud, Docker, or local environment."""
+        # Check for Streamlit Cloud environment
+        if hasattr(st, '__version__') and os.getenv('STREAMLIT_SHARING_URL'):
+            return 'streamlit_cloud'
         
-        chrome_options = Options()
+        # Check for Docker environment
+        if os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER'):
+            return 'docker'
         
-        # Set binary location for Chromium inside Docker
+        # Check for system Chrome/Chromium paths (Docker-like)
+        if os.getenv('CHROME_BIN') and os.getenv('CHROMEDRIVER_PATH'):
+            return 'docker'
+        
+        # Default to local environment
+        return 'local'
+
+    @st.cache_resource
+    def _create_streamlit_driver(_self):
+        """Create a cached Chrome driver for Streamlit Cloud (static method for caching)."""
+        logger.info("🌐 Creating Streamlit Cloud compatible driver...")
+        
+        from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
+        from webdriver_manager.core.os_manager import ChromeType
+        
+        # Streamlit Cloud optimized options
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        
+        # Use Chromium type for better cloud compatibility
+        driver = webdriver.Chrome(
+            service=Service(
+                ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
+            ),
+            options=options,
+        )
+        
+        # Configure driver
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        driver.set_page_load_timeout(30)
+        driver.implicitly_wait(10)
+        
+        logger.info("✅ Streamlit Cloud driver created successfully!")
+        return driver
+
+    def _create_docker_driver(self):
+        """Create a Chrome driver for Docker environment."""
+        logger.info("🐳 Creating Docker compatible driver...")
+        
+        options = Options()
+        
+        # Set binary location for Docker
         chrome_bin = os.getenv('CHROME_BIN', '/usr/bin/chromium')
-        chrome_options.binary_location = chrome_bin
-        logger.info(f"🔧 Chrome binary: {chrome_bin}")
-        logger.info(f"🔧 Chrome binary exists: {os.path.exists(chrome_bin)}")
+        if os.path.exists(chrome_bin):
+            options.binary_location = chrome_bin
+            logger.info(f"🔧 Using Chrome binary: {chrome_bin}")
         
         if self.headless:
-            chrome_options.add_argument("--headless")
-            logger.info("🔧 Running in headless mode")
+            options.add_argument("--headless")
         
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument(f"--user-agent={self.ua.random}")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument(f"--user-agent={self.ua.random}")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
         
-        logger.info(f"🔧 Chrome options configured: {len(chrome_options.arguments)} arguments")
+        # Try system chromedriver first
+        chromedriver_path = os.getenv('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
+        
+        if os.path.exists(chromedriver_path):
+            logger.info(f"🔧 Using system ChromeDriver: {chromedriver_path}")
+            from selenium.webdriver.chrome.service import Service
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            logger.info("🔧 Using webdriver-manager for Docker...")
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.service import Service
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+        
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        driver.set_page_load_timeout(30)
+        driver.implicitly_wait(10)
+        
+        logger.info("✅ Docker driver created successfully!")
+        return driver
+
+    def _create_local_driver(self):
+        """Create a Chrome driver for local development."""
+        logger.info("🖥️ Creating local development driver...")
+        
+        options = Options()
+        
+        if self.headless:
+            options.add_argument("--headless")
+        
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument(f"--user-agent={self.ua.random}")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
         
         try:
-            # Try to use system chromedriver path
-            chromedriver_path = os.getenv('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
-            logger.info(f"🔧 ChromeDriver path: {chromedriver_path}")
+            # Try webdriver-manager first for local
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.service import Service
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+            logger.info("✅ Local driver with webdriver-manager created!")
+        except Exception as e:
+            logger.warning(f"webdriver-manager failed: {e}, trying system Chrome...")
+            # Fallback to system Chrome
+            driver = webdriver.Chrome(options=options)
+            logger.info("✅ Local driver with system Chrome created!")
+        
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        driver.set_page_load_timeout(30)
+        driver.implicitly_wait(10)
+        
+        return driver
+
+    def setup_driver(self):
+        """Setup Chrome WebDriver with environment-specific optimization."""
+        env = self._detect_environment()
+        logger.info(f"🔍 Detected environment: {env}")
+        
+        try:
+            if env == 'streamlit_cloud':
+                logger.info("🌐 Using Streamlit Cloud optimized setup...")
+                self.driver = self._create_streamlit_driver()
+                
+            elif env == 'docker':
+                logger.info("🐳 Using Docker optimized setup...")
+                self.driver = self._create_docker_driver()
+                
+            else:  # local
+                logger.info("🖥️ Using local development setup...")
+                self.driver = self._create_local_driver()
             
-            # Check if chromedriver exists
-            if os.path.exists(chromedriver_path):
-                logger.info(f"✅ ChromeDriver found at {chromedriver_path}")
-                logger.info(f"🔧 ChromeDriver executable: {os.access(chromedriver_path, os.X_OK)}")
-                from selenium.webdriver.chrome.service import Service
-                service = Service(chromedriver_path)
-                logger.info("🔧 Creating Chrome WebDriver with system driver...")
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            else:
-                logger.warning(f"⚠️ ChromeDriver not found at {chromedriver_path}, trying webdriver-manager")
-                # Fallback to webdriver-manager
-                try:
-                    from webdriver_manager.chrome import ChromeDriverManager
-                    logger.info("🔧 Downloading ChromeDriver with webdriver-manager...")
-                    service = Service(ChromeDriverManager().install())
-                    self.driver = webdriver.Chrome(service=service, options=chrome_options)
-                    logger.info("✅ Chrome WebDriver created with webdriver-manager")
-                except Exception as wdm_error:
-                    logger.error(f"💥 webdriver-manager failed: {wdm_error}")
-                    logger.info("🔧 Last resort: trying without specifying service...")
-                    # Last resort: try without specifying service
-                    self.driver = webdriver.Chrome(options=chrome_options)
-            
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             logger.info("✅ Chrome driver setup successful!")
             logger.info(f"✅ Browser version: {self.driver.capabilities.get('browserVersion', 'Unknown')}")
             logger.info(f"✅ ChromeDriver version: {self.driver.capabilities.get('chrome', {}).get('chromedriverVersion', 'Unknown')}")
             
         except Exception as e:
-            logger.error(f"💥 CRITICAL: Failed to setup Chrome driver: {e}")
+            logger.error(f"💥 CRITICAL: Failed to setup Chrome driver in {env} environment: {e}")
             logger.error(f"💥 Error type: {type(e).__name__}")
             logger.error(f"💥 This will cause Notion scraping to fail and return SAMPLE data!")
             import traceback
             logger.error(f"💥 Full traceback: {traceback.format_exc()}")
             
-            # Add helpful troubleshooting info
-            logger.error("🔧 Possible solutions:")
-            logger.error("  - Check if Chrome/Chromium is installed")
-            logger.error("  - Verify CHROME_BIN and CHROMEDRIVER_PATH environment variables")
-            logger.error("  - Try: apt-get install chromium chromium-driver")
-            logger.error("  - Check if running in Docker with proper Chrome setup")
+            # Environment-specific troubleshooting
+            if env == 'streamlit_cloud':
+                logger.error("🔧 Streamlit Cloud troubleshooting:")
+                logger.error("  - Ensure webdriver-manager is in requirements.txt")
+                logger.error("  - Check Streamlit Cloud resource limits")
+                logger.error("  - Try deploying with fewer dependencies")
+            elif env == 'docker':
+                logger.error("🔧 Docker troubleshooting:")
+                logger.error("  - Verify CHROME_BIN and CHROMEDRIVER_PATH are set")
+                logger.error("  - Run: apt-get install chromium chromium-driver")
+                logger.error("  - Check Dockerfile Chrome installation")
+            else:
+                logger.error("🔧 Local troubleshooting:")
+                logger.error("  - Install Chrome: brew install google-chrome")
+                logger.error("  - Or install Chromium: brew install chromium")
+                logger.error("  - Ensure Chrome is in PATH")
             
             raise
     

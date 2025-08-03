@@ -160,6 +160,18 @@ def show_data_upload():
                                     st.error(f"❌ Notion scraping failed - showing SAMPLE data instead!")
                                     st.warning("🔍 The data below is NOT your real Notion data. Use the '🐛 Debug Info' page to see why scraping failed.")
                                     
+                                    # Environment-specific guidance
+                                    from src.notion_scraper import NotionScraper
+                                    temp_scraper = NotionScraper()
+                                    env = temp_scraper._detect_environment()
+                                    
+                                    if env == 'streamlit_cloud':
+                                        st.info("🌐 **Streamlit Cloud detected**: Chrome setup optimized for cloud environment. Check debug logs for specific issues.")
+                                    elif env == 'docker':
+                                        st.info("🐳 **Docker environment detected**: Verify CHROME_BIN and CHROMEDRIVER_PATH are set correctly.")
+                                    else:
+                                        st.info("🖥️ **Local environment detected**: Ensure Chrome/Chromium is installed on your system.")
+                                    
                                     # Add a clear sample data indicator
                                     st.markdown("""
                                     <div style="background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 4px solid #f44336;">
