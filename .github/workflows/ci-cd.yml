@@ -170,8 +170,6 @@ jobs:
         echo "| Service | Status | URL |" >> $GITHUB_STEP_SUMMARY
         echo "|---------|--------|-----|" >> $GITHUB_STEP_SUMMARY
         echo "| 🐳 Container Registry | ✅ Built | \`ghcr.io/${{ github.repository }}:latest\` |" >> $GITHUB_STEP_SUMMARY
-        echo "| 🚂 Railway | ${{ needs.deploy-railway.result == 'success' && '✅ Deployed' || needs.deploy-railway.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | ${{ vars.RAILWAY_URL || 'Not configured' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| 🦄 Heroku | ${{ needs.deploy-heroku.result == 'success' && '✅ Deployed' || needs.deploy-heroku.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | ${{ vars.HEROKU_URL || 'Not configured' }} |" >> $GITHUB_STEP_SUMMARY
         echo "| ☁️ Streamlit | ${{ needs.deploy-streamlit.result == 'success' && '✅ Deployed' || needs.deploy-streamlit.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | ${{ vars.STREAMLIT_SHARING_URL || 'Not configured' }} |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📝 Next Steps:" >> $GITHUB_STEP_SUMMARY
