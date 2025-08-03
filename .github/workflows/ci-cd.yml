@@ -111,45 +111,7 @@ jobs:
         # Cleanup
         docker stop test-container
         docker rm test-container
-
-  # 🚀 Deploy to Railway (optional)
-  deploy-railway:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: test-and-build
-    runs-on: ubuntu-latest
-    environment: production
-    
-    steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v4
-
-    - name: 🚂 Deploy to Railway
-      if: vars.RAILWAY_PROJECT_ID != ''
-      uses: railwayapp/railway-deploy@v3
-      with:
-        railway_token: ${{ secrets.RAILWAY_TOKEN }}
-        railway_project_id: ${{ vars.RAILWAY_PROJECT_ID }}
-        railway_environment: production
-
-  # 🌐 Deploy to Heroku (optional)
-  deploy-heroku:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: test-and-build
-    runs-on: ubuntu-latest
-    environment: production
-    
-    steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v4
-
-    - name: 🦄 Deploy to Heroku
-      if: vars.HEROKU_APP_NAME != ''
-      uses: akhileshns/heroku-deploy@v3.12.14
-      with:
-        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-        heroku_app_name: ${{ vars.HEROKU_APP_NAME }}
-        heroku_email: ${{ vars.HEROKU_EMAIL }}
-        usedocker: true
+  
 
   # 📊 Deploy to Streamlit Cloud (optional)
   deploy-streamlit:
@@ -162,12 +124,37 @@ jobs:
     - name: 📥 Checkout repository
       uses: actions/checkout@v4
       
-    - name: ☁️ Trigger Streamlit Cloud deployment
-      if: vars.STREAMLIT_SHARING_URL != ''
+    - name: ☁️ Check Streamlit Cloud deployment
       run: |
-        echo "🎯 Streamlit Cloud will auto-deploy from main branch"
-        echo "📍 App URL: ${{ vars.STREAMLIT_SHARING_URL }}"
-        echo "✅ Deployment triggered by push to main"
+        if [ -n "${{ vars.STREAMLIT_SHARING_URL }}" ]; then
+          echo "🎯 Streamlit Cloud configured at: ${{ vars.STREAMLIT_SHARING_URL }}"
+          echo "📡 Waiting for Streamlit Cloud to detect changes..."
+          
+          # Wait for Streamlit Cloud to pick up the changes
+          sleep 45
+          
+          # Test if the app is accessible and responding
+          echo "🔍 Testing deployment endpoint..."
+          if curl -f -s --max-time 30 "${{ vars.STREAMLIT_SHARING_URL }}" > /dev/null; then
+            echo "✅ Streamlit app is accessible and likely updated!"
+            echo "🎉 Auto-deployment successful!"
+          else
+            echo "⚠️ Streamlit app might still be deploying or has issues..."
+            echo "🔄 Manual check required at: ${{ vars.STREAMLIT_SHARING_URL }}"
+            echo "💡 If this persists, check Streamlit Cloud logs"
+          fi
+        else
+          echo "❌ STREAMLIT_SHARING_URL not configured"
+          echo ""
+          echo "📋 To enable Streamlit Cloud auto-deployment:"
+          echo "1. Go to: https://share.streamlit.io/"
+          echo "2. Connect this repository: ${{ github.repository }}"
+          echo "3. Set main file: main.py"
+          echo "4. Copy the app URL and set as STREAMLIT_SHARING_URL variable"
+          echo "5. Future pushes will auto-deploy!"
+          echo ""
+          echo "🔧 Alternative: Use Railway/Heroku for automated deployment"
+        fi
 
   # 🎉 Notify deployment status
   notify:

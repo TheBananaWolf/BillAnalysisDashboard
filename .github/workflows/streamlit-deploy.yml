@@ -39,27 +39,39 @@ jobs:
             exit(1)
         "
 
-    - name: 📋 Create deployment info
+    - name: 📋 Check Streamlit Cloud setup
       run: |
-        echo "## 🎯 Streamlit Cloud Deployment" >> $GITHUB_STEP_SUMMARY
+        echo "## 🎯 Streamlit Cloud Deployment Status" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🚀 Deployment Steps:" >> $GITHUB_STEP_SUMMARY
-        echo "1. **Automatic Deployment**: Streamlit Cloud will automatically deploy from the \`main\` branch" >> $GITHUB_STEP_SUMMARY
-        echo "2. **App URL**: Visit your app at [your-streamlit-url](https://share.streamlit.io/)" >> $GITHUB_STEP_SUMMARY
-        echo "3. **Configuration**: Make sure your app is connected to this repository" >> $GITHUB_STEP_SUMMARY
+        
+        # Check if Streamlit URL is configured
+        if [ -n "${{ vars.STREAMLIT_SHARING_URL }}" ]; then
+          echo "### ✅ Streamlit Cloud Connected!" >> $GITHUB_STEP_SUMMARY
+          echo "- **App URL**: [${{ vars.STREAMLIT_SHARING_URL }}](${{ vars.STREAMLIT_SHARING_URL }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Auto-deploy**: Enabled ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **Your app will auto-deploy on every push to main!**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ⚠️ Streamlit Cloud Not Connected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To enable auto-deployment, follow these steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. 🌐 Go to [share.streamlit.io](https://share.streamlit.io/)" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🔗 Connect your GitHub account" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📁 Select repository: \`${{ github.repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. 🎯 Set main file: \`main.py\`" >> $GITHUB_STEP_SUMMARY
+          echo "5. ⚙️ Set Python version: \`3.11\`" >> $GITHUB_STEP_SUMMARY
+          echo "6. 🚀 Click Deploy!" >> $GITHUB_STEP_SUMMARY
+          echo "7. 📝 Copy the app URL and add as \`STREAMLIT_SHARING_URL\` variable in repo settings" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📋 Requirements:" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Python version: 3.11" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Requirements file: \`requirements.txt\`" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Current Configuration:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Python: 3.11" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Main file: \`main.py\`" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Repository: Public or connected to Streamlit Cloud" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔧 Manual Setup:" >> $GITHUB_STEP_SUMMARY
-        echo "1. Go to [share.streamlit.io](https://share.streamlit.io/)" >> $GITHUB_STEP_SUMMARY
-        echo "2. Connect your GitHub account" >> $GITHUB_STEP_SUMMARY
-        echo "3. Select this repository (\`${{ github.repository }}\`)" >> $GITHUB_STEP_SUMMARY
-        echo "4. Set main file path: \`main.py\`" >> $GITHUB_STEP_SUMMARY
-        echo "5. Deploy! 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Requirements: \`requirements.txt\`" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Repository: Public" >> $GITHUB_STEP_SUMMARY
 
     - name: ✅ Deployment ready
       run: |

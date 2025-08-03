@@ -103,10 +103,19 @@ class NotionScraper:
             logger.info(f"✅ ChromeDriver version: {self.driver.capabilities.get('chrome', {}).get('chromedriverVersion', 'Unknown')}")
             
         except Exception as e:
-            logger.error(f"💥 Failed to setup Chrome driver: {e}")
+            logger.error(f"💥 CRITICAL: Failed to setup Chrome driver: {e}")
             logger.error(f"💥 Error type: {type(e).__name__}")
+            logger.error(f"💥 This will cause Notion scraping to fail and return SAMPLE data!")
             import traceback
             logger.error(f"💥 Full traceback: {traceback.format_exc()}")
+            
+            # Add helpful troubleshooting info
+            logger.error("🔧 Possible solutions:")
+            logger.error("  - Check if Chrome/Chromium is installed")
+            logger.error("  - Verify CHROME_BIN and CHROMEDRIVER_PATH environment variables")
+            logger.error("  - Try: apt-get install chromium chromium-driver")
+            logger.error("  - Check if running in Docker with proper Chrome setup")
+            
             raise
     
     def scrape_notion_page(self, url: str) -> pd.DataFrame:
@@ -772,12 +781,19 @@ class NotionScraper:
     
     def _create_fallback_data(self) -> pd.DataFrame:
         """Create fallback sample data when scraping fails."""
-        logger.warning("Creating fallback sample data - actual scraping failed...")
+        logger.warning("❌ Creating fallback sample data - actual scraping failed...")
         
         # Import the DataProcessor to use its sample data creation
         from .data_processor import DataProcessor
         processor = DataProcessor()
-        return processor.create_sample_data(100)  # Create 100 sample transactions
+        sample_df = processor.create_sample_data(100)  # Create 100 sample transactions
+        
+        # CRITICAL: Mark this as sample data so it's not confused with real Notion data
+        sample_df['_data_source'] = 'sample_fallback'
+        sample_df['_is_sample_data'] = True
+        
+        logger.error("🚨 RETURNING SAMPLE DATA - NOT REAL NOTION DATA!")
+        return sample_df
     
     def close(self):
         """Clean up resources."""

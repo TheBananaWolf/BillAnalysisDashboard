@@ -69,8 +69,13 @@ class DataProcessor:
                 df = self.create_sample_data()
                 # Add a marker to identify sample data
                 df['_data_source'] = 'sample'
+            elif '_is_sample_data' in df.columns and df['_is_sample_data'].iloc[0]:
+                # Data was already marked as sample by the scraper
+                logger.error("🚨 Notion scraper returned SAMPLE DATA (not real data)")
+                logger.error("🔍 Check debug logs to see why scraping failed")
+                # Keep the existing _data_source from scraper (likely 'sample_fallback')
             else:
-                logger.info(f"✅ Successfully extracted {len(df)} transactions from Notion")
+                logger.info(f"✅ Successfully extracted {len(df)} REAL transactions from Notion")
                 # Add a marker to identify real data
                 df['_data_source'] = 'notion'
             

@@ -152,17 +152,29 @@ def show_data_upload():
                                 
                                 # Check data source and show appropriate message
                                 data_source = df.get('_data_source', ['unknown']).iloc[0] if '_data_source' in df.columns else 'unknown'
+                                is_sample = '_is_sample_data' in df.columns and df['_is_sample_data'].iloc[0]
                                 
-                                if data_source == 'notion':
-                                    st.success(f"✅ Successfully loaded {len(df)} real transactions from Notion!")
-                                elif data_source in ['sample', 'sample_fallback']:
-                                    st.warning("⚠️ Showing sample data - Notion scraping failed. Try the troubleshooting tips below.")
+                                if data_source == 'notion' and not is_sample:
+                                    st.success(f"✅ Successfully loaded {len(df)} REAL transactions from Notion!")
+                                elif is_sample or data_source in ['sample', 'sample_fallback']:
+                                    st.error(f"❌ Notion scraping failed - showing SAMPLE data instead!")
+                                    st.warning("🔍 The data below is NOT your real Notion data. Use the '🐛 Debug Info' page to see why scraping failed.")
+                                    
+                                    # Add a clear sample data indicator
+                                    st.markdown("""
+                                    <div style="background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 4px solid #f44336;">
+                                    <strong>⚠️ WARNING:</strong> This is fake sample data, not your real transactions!
+                                    </div>
+                                    """, unsafe_allow_html=True)
                                 else:
-                                    st.info(f"ℹ️ Loaded {len(df)} transactions")
+                                    st.info(f"ℹ️ Loaded {len(df)} transactions (source: {data_source})")
                                 
-                                # Remove the data source marker before storing
-                                if '_data_source' in df.columns:
-                                    df = df.drop('_data_source', axis=1)
+                                # Remove the data source markers before storing
+                                df_clean = df.copy()
+                                for col in ['_data_source', '_is_sample_data']:
+                                    if col in df_clean.columns:
+                                        df_clean = df_clean.drop(col, axis=1)
+                                df = df_clean
                                 
                                 # Show column information
                                 st.info(f"📊 **Columns detected:** {', '.join(df.columns)}")
