@@ -1,0 +1,195 @@
+name: 📚 Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install documentation tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pdoc3 sphinx
+
+    - name: 📖 Generate API documentation
+      run: |
+        echo "📖 Generating API documentation..."
+        mkdir -p docs/api
+        
+        # Generate docs for each module
+        pdoc --html --output-dir docs/api src/ --force
+        
+        # Create index
+        cat > docs/api/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bill Analysis API Documentation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1 { color: #2c3e50; }
+        .module { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .module h3 { margin-top: 0; color: #34495e; }
+        .module a { text-decoration: none; color: #3498db; }
+        .module a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>🧾 Bill Analysis API Documentation</h1>
+    <p>Auto-generated API documentation for the Bill Analysis application.</p>
+    
+    <div class="module">
+        <h3>📊 Data Processor</h3>
+        <p>Handles loading, cleaning, and preprocessing of financial data.</p>
+        <a href="src/data_processor.html">View Documentation →</a>
+    </div>
+    
+    <div class="module">
+        <h3>🔍 Analyzer</h3>
+        <p>Core analysis functionality for financial data patterns and trends.</p>
+        <a href="src/analyzer.html">View Documentation →</a>
+    </div>
+    
+    <div class="module">
+        <h3>📈 Visualizer</h3>
+        <p>Creates various charts and visualizations for financial data.</p>
+        <a href="src/visualizer.html">View Documentation →</a>
+    </div>
+    
+    <div class="module">
+        <h3>💡 Insights Generator</h3>
+        <p>Generates AI-powered insights and recommendations from financial data.</p>
+        <a href="src/insights_generator.html">View Documentation →</a>
+    </div>
+    
+    <div class="module">
+        <h3>🕷️ Notion Scraper</h3>
+        <p>Web scraper for extracting financial data from Notion pages.</p>
+        <a href="src/notion_scraper.html">View Documentation →</a>
+    </div>
+    
+    <hr style="margin: 40px 0;">
+    <p><small>Generated on $(date) | <a href="https://github.com/${{ github.repository }}">View Source Code</a></small></p>
+</body>
+</html>
+EOF
+
+    - name: 📝 Generate project documentation
+      run: |
+        echo "📝 Generating project documentation..."
+        mkdir -p docs/project
+        
+        # Create comprehensive documentation
+        cat > docs/project/README.md << 'EOF'
+# 🧾 Bill Analysis Application
+
+## 📋 Overview
+A comprehensive financial analysis tool that helps users understand their spending patterns, identify trends, and get actionable insights from their financial data.
+
+## 🏗️ Architecture
+
+### Core Components
+- **Data Processor**: Handles data loading, cleaning, and preprocessing
+- **Analyzer**: Performs financial analysis and pattern detection  
+- **Visualizer**: Creates interactive charts and graphs
+- **Insights Generator**: Provides AI-powered recommendations
+- **Notion Scraper**: Extracts data from Notion pages
+
+### Technology Stack
+- **Frontend**: Streamlit (Python web framework)
+- **Backend**: Python with pandas, plotly, and selenium
+- **Deployment**: Docker containers
+- **CI/CD**: GitHub Actions
+
+## 🚀 Deployment Options
+
+### 1. Streamlit Cloud
+- Automatic deployment from GitHub
+- Free hosting for public repositories
+- Easy setup and configuration
+
+### 2. Docker Container
+- Portable across any environment
+- Includes all dependencies
+- Can be deployed to any cloud provider
+
+### 3. Local Development
+- Run directly with Python
+- Use Docker Compose for full stack
+- Hot reload for development
+
+## 📊 Features
+
+### Data Sources
+- 📁 File upload (CSV, Excel)
+- 🌐 Notion page scraping
+- 📝 Sample data generation
+
+### Analysis Types
+- 📈 Monthly spending trends
+- 📊 Category analysis
+- 📅 Weekly patterns
+- 🔍 Spending insights
+- 💰 Savings recommendations
+
+### Visualizations
+- 📊 Interactive charts
+- 📈 Trend analysis
+- 🥧 Category breakdowns
+- 📅 Time series plots
+
+## 🔧 Configuration
+
+### Environment Variables
+- `CHROME_BIN`: Chrome binary path (for Docker)
+- `CHROMEDRIVER_PATH`: ChromeDriver path (for Docker)
+
+### Deployment Secrets
+- `RAILWAY_TOKEN`: Railway deployment token
+- `HEROKU_API_KEY`: Heroku deployment key
+- `STREAMLIT_SHARING_URL`: Streamlit Cloud app URL
+
+## 📈 Usage Analytics
+This documentation is auto-generated and updated on every commit to the main branch.
+EOF
+
+    - name: 🌐 Deploy documentation to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs
+        cname: ${{ vars.DOCS_DOMAIN }}  # Optional: custom domain
+
+    - name: 📊 Documentation summary
+      run: |
+        echo "## 📚 Documentation Generated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📖 Available Documentation:" >> $GITHUB_STEP_SUMMARY
+        echo "- **API Docs**: [View API Documentation](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/api/)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Project Docs**: [View Project Documentation](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/project/)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Source Code**: [View on GitHub](https://github.com/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📁 Generated Files:" >> $GITHUB_STEP_SUMMARY
+        echo "- API documentation for all Python modules" >> $GITHUB_STEP_SUMMARY
+        echo "- Project overview and architecture guide" >> $GITHUB_STEP_SUMMARY
+        echo "- Deployment and configuration documentation" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📝 Documentation auto-updates on every push to main branch."

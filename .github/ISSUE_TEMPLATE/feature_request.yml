@@ -1,0 +1,120 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement
+title: "[FEATURE] "
+labels: ["enhancement", "feature-request"]
+assignees:
+  - bananawolf
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new feature! ✨
+        Please describe your idea so we can understand and prioritize it.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 📂 Feature Category
+      description: What type of feature is this?
+      options:
+        - Data Analysis (new calculations, metrics)
+        - Visualizations (new charts, graphs)
+        - Data Sources (new import methods)
+        - User Interface (UI/UX improvements)
+        - Export/Sharing (new output formats)
+        - Performance (speed, efficiency)
+        - Integration (external services)
+        - Automation (scheduled tasks)
+        - Security (privacy, access control)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 🎯 Priority
+      description: How important is this feature to you?
+      options:
+        - Low (nice to have)
+        - Medium (would be helpful)
+        - High (important for my use case)
+        - Critical (blocking my workflow)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 🎯 Problem Statement
+      description: What problem does this feature solve?
+      placeholder: "As a user, I want to... so that I can..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 💡 Proposed Solution
+      description: Describe your ideal solution
+      placeholder: "I would like the application to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternative Solutions
+      description: Have you considered any alternative solutions or workarounds?
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: 📋 Examples
+      description: Any examples, mockups, or references that might help?
+      placeholder: |
+        - Similar features in other apps
+        - Screenshots or mockups
+        - Example data or use cases
+
+  - type: textarea
+    id: benefits
+    attributes:
+      label: 🎉 Benefits
+      description: Who would benefit from this feature and how?
+      placeholder: |
+        - Users who...
+        - It would improve...
+        - Impact on workflow...
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: 🛠️ Estimated Complexity
+      description: How complex do you think this feature would be to implement?
+      options:
+        - Simple (small change/addition)
+        - Medium (moderate development effort)
+        - Complex (significant development required)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📎 Additional Context
+      description: Any other information that might be helpful
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: ✅ Checklist
+      options:
+        - label: I have searched existing issues and feature requests
+          required: true
+        - label: This feature would benefit multiple users, not just my specific case
+          required: true
+        - label: I understand this is a suggestion and may not be implemented immediately
+          required: true

@@ -1,0 +1,70 @@
+name: 🎯 Deploy to Streamlit Cloud
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggers
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🔍 Validate Streamlit app
+      run: |
+        # Check if main.py can be imported
+        python -c "
+        import sys
+        sys.path.append('.')
+        try:
+            exec(open('main.py').read())
+            print('✅ Streamlit app validation successful!')
+        except SystemExit:
+            print('✅ Streamlit app loaded (SystemExit is expected)')
+        except Exception as e:
+            print(f'❌ Streamlit app validation failed: {e}')
+            exit(1)
+        "
+
+    - name: 📋 Create deployment info
+      run: |
+        echo "## 🎯 Streamlit Cloud Deployment" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🚀 Deployment Steps:" >> $GITHUB_STEP_SUMMARY
+        echo "1. **Automatic Deployment**: Streamlit Cloud will automatically deploy from the \`main\` branch" >> $GITHUB_STEP_SUMMARY
+        echo "2. **App URL**: Visit your app at [your-streamlit-url](https://share.streamlit.io/)" >> $GITHUB_STEP_SUMMARY
+        echo "3. **Configuration**: Make sure your app is connected to this repository" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Requirements:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Python version: 3.11" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Requirements file: \`requirements.txt\`" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Main file: \`main.py\`" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Repository: Public or connected to Streamlit Cloud" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Manual Setup:" >> $GITHUB_STEP_SUMMARY
+        echo "1. Go to [share.streamlit.io](https://share.streamlit.io/)" >> $GITHUB_STEP_SUMMARY
+        echo "2. Connect your GitHub account" >> $GITHUB_STEP_SUMMARY
+        echo "3. Select this repository (\`${{ github.repository }}\`)" >> $GITHUB_STEP_SUMMARY
+        echo "4. Set main file path: \`main.py\`" >> $GITHUB_STEP_SUMMARY
+        echo "5. Deploy! 🚀" >> $GITHUB_STEP_SUMMARY
+
+    - name: ✅ Deployment ready
+      run: |
+        echo "🎉 Repository is ready for Streamlit Cloud deployment!"
+        echo "📍 Repository: ${{ github.repository }}"
+        echo "📂 Main file: main.py"
+        echo "🐍 Python version: 3.11"
+        echo "📦 Dependencies: $(wc -l < requirements.txt) packages"

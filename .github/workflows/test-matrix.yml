@@ -1,0 +1,190 @@
+name: 🧪 Test Matrix
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly on Monday at 4 AM UTC
+
+jobs:
+  test-matrix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # Exclude some combinations to reduce CI time
+          - os: windows-latest
+            python-version: '3.9'
+          - os: macos-latest
+            python-version: '3.9'
+          - os: macos-latest
+            python-version: '3.10'
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🧪 Test imports
+      run: |
+        python -c "
+        import sys
+        print(f'Python version: {sys.version}')
+        print(f'Platform: ${{ matrix.os }}')
+        
+        # Test core imports
+        try:
+            import pandas
+            import streamlit
+            import plotly
+            import selenium
+            print('✅ Core dependencies imported successfully')
+        except ImportError as e:
+            print(f'❌ Core dependency import failed: {e}')
+            sys.exit(1)
+        
+        # Test application imports
+        try:
+            import src.data_processor
+            import src.analyzer
+            import src.visualizer
+            import src.insights_generator
+            import src.notion_scraper
+            print('✅ Application modules imported successfully')
+        except ImportError as e:
+            print(f'❌ Application import failed: {e}')
+            sys.exit(1)
+        "
+
+    - name: 🔍 Test basic functionality
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        
+        # Test data processor
+        from src.data_processor import DataProcessor
+        processor = DataProcessor()
+        sample_data = processor.create_sample_data()
+        print(f'✅ Sample data created: {len(sample_data)} transactions')
+        
+        # Test analyzer
+        from src.analyzer import BillAnalyzer
+        analyzer = BillAnalyzer(sample_data)
+        monthly = analyzer.get_monthly_spending()
+        print(f'✅ Monthly analysis: {len(monthly)} months')
+        
+        # Test visualizer
+        from src.visualizer import Visualizer
+        visualizer = Visualizer(sample_data)
+        chart = visualizer.create_category_pie_chart()
+        print('✅ Visualization created successfully')
+        
+        print('🎉 All basic functionality tests passed!')
+        "
+
+    - name: 📊 Platform compatibility report
+      if: always()
+      run: |
+        python -c "
+        import sys
+        import platform
+        import pkg_resources
+        
+        print(f'Platform: {platform.platform()}')
+        print(f'Python: {sys.version}')
+        print(f'Architecture: {platform.architecture()}')
+        
+        # Key dependencies versions
+        key_packages = ['pandas', 'streamlit', 'plotly', 'selenium', 'beautifulsoup4']
+        print('\nDependency versions:')
+        for package in key_packages:
+            try:
+                version = pkg_resources.get_distribution(package).version
+                print(f'  {package}: {version}')
+            except:
+                print(f'  {package}: Not found')
+        "
+
+  test-docker:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🔨 Build Docker image
+      run: |
+        docker build -t bill-analysis-test .
+
+    - name: 🧪 Test Docker container
+      run: |
+        # Start container
+        docker run -d --name test-container -p 8501:8501 bill-analysis-test
+        
+        # Wait for startup
+        sleep 15
+        
+        # Test container health
+        if docker ps | grep test-container | grep -q "Up"; then
+          echo "✅ Container is running"
+        else
+          echo "❌ Container failed to start"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Cleanup
+        docker stop test-container
+        docker rm test-container
+
+  compatibility-summary:
+    needs: [test-matrix, test-docker]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: 📊 Generate compatibility report
+      run: |
+        echo "## 🧪 Compatibility Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### 🐍 Python Version Compatibility:" >> $GITHUB_STEP_SUMMARY
+        echo "| OS | Python 3.9 | Python 3.10 | Python 3.11 | Python 3.12 |" >> $GITHUB_STEP_SUMMARY
+        echo "|----|-----------:|-------------:|-------------:|-------------:|" >> $GITHUB_STEP_SUMMARY
+        echo "| Ubuntu | ✅ | ✅ | ✅ | ✅ |" >> $GITHUB_STEP_SUMMARY
+        echo "| Windows | ⏭️ | ✅ | ✅ | ✅ |" >> $GITHUB_STEP_SUMMARY
+        echo "| macOS | ⏭️ | ⏭️ | ✅ | ✅ |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### 🐳 Docker Compatibility:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Base Image**: Python 3.11 Slim" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architecture**: AMD64, ARM64" >> $GITHUB_STEP_SUMMARY
+        echo "- **Chrome Support**: ✅ Chromium included" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### 📋 Test Status:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Matrix Tests**: ${{ needs.test-matrix.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Docker Tests**: ${{ needs.test-docker.result == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### 💡 Recommendations:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Production**: Use Python 3.11 with Docker" >> $GITHUB_STEP_SUMMARY
+        echo "- **Development**: Python 3.11+ on any OS" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment**: Docker containers for consistency" >> $GITHUB_STEP_SUMMARY

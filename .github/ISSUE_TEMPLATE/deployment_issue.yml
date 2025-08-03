@@ -1,0 +1,150 @@
+name: 🚀 Deployment Issue
+description: Report problems with deployment or CI/CD
+title: "[DEPLOY] "
+labels: ["deployment", "ci-cd"]
+assignees:
+  - bananawolf
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Having trouble with deployment? 🚀
+        Let us help you get your application running!
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 🌐 Deployment Platform
+      description: Which platform are you trying to deploy to?
+      options:
+        - Streamlit Cloud
+        - Railway
+        - Heroku
+        - Docker (local)
+        - Docker (cloud provider)
+        - GitHub Actions (CI/CD)
+        - Other cloud provider
+        - Local development
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: 🔍 Issue Type
+      description: What kind of deployment issue are you experiencing?
+      options:
+        - Build failure
+        - Deployment failure
+        - Application won't start
+        - Configuration issues
+        - Performance problems
+        - Access/permissions issues
+        - Environment variables
+        - Dependencies/requirements
+        - GitHub Actions workflow failure
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 📝 Issue Description
+      description: Describe the deployment issue you're experiencing
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 🔄 Deployment Steps Taken
+      description: What steps did you follow to deploy?
+      placeholder: |
+        1. Connected repository to platform
+        2. Set environment variables: ...
+        3. Clicked deploy
+        4. Error occurred at...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 Error Logs
+      description: Include any error messages, build logs, or deployment logs
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: ⚙️ Configuration
+      description: Share your configuration (remove any sensitive information)
+      placeholder: |
+        Environment variables set:
+        - CHROME_BIN: ...
+        - CHROMEDRIVER_PATH: ...
+        
+        Platform settings:
+        - Python version: ...
+        - Build command: ...
+        - Start command: ...
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 🖥️ Environment Details
+      description: Details about your environment
+      placeholder: |
+        - Repository: public/private
+        - Branch: main/other
+        - Last working deployment: ...
+        - Recent changes: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: ⚡ Urgency
+      description: How urgent is this deployment issue?
+      options:
+        - Low (learning/experimenting)
+        - Medium (development blocked)
+        - High (production issue)
+        - Critical (service down)
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted_solutions
+    attributes:
+      label: 🛠️ Solutions Attempted
+      description: What have you already tried to fix this issue?
+      placeholder: |
+        - Checked deployment guide
+        - Verified secrets/variables
+        - Tried redeploying
+        - Checked platform documentation
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📎 Additional Information
+      description: Any other details that might help us assist you
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: ✅ Checklist
+      options:
+        - label: I have read the deployment guide in `.github/DEPLOYMENT.md`
+          required: true
+        - label: I have checked that my repository settings allow the deployment platform access
+          required: true
+        - label: I have verified that all required secrets and variables are set
+          required: true
+        - label: I have included the complete error logs (with sensitive info removed)
+          required: true

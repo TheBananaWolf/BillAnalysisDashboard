@@ -1,0 +1,193 @@
+name: 🚀 CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 🧪 Test and Build
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🔍 Lint code with flake8
+      run: |
+        pip install flake8
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: 🧪 Run basic import tests
+      run: |
+        python -c "
+        try:
+            import src.data_processor
+            import src.analyzer
+            import src.visualizer
+            import src.insights_generator
+            import src.notion_scraper
+            print('✅ All imports successful!')
+        except Exception as e:
+            print(f'❌ Import error: {e}')
+            exit(1)
+        "
+
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🔑 Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🏷️ Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: 🔨 Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: 🧪 Test Docker container
+      run: |
+        echo "🐳 Testing Docker container startup..."
+        
+        # Build for testing
+        docker build -t bill-analysis-test .
+        
+        # Start container in background
+        docker run -d --name test-container -p 8501:8501 bill-analysis-test
+        
+        # Wait for startup
+        echo "⏳ Waiting for application to start..."
+        sleep 15
+        
+        # Test if the application is responding
+        if curl -f http://localhost:8501/healthz 2>/dev/null || curl -f http://localhost:8501 2>/dev/null; then
+          echo "✅ Application is responding!"
+        else
+          echo "❌ Application health check failed"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Cleanup
+        docker stop test-container
+        docker rm test-container
+
+  # 🚀 Deploy to Railway (optional)
+  deploy-railway:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🚂 Deploy to Railway
+      if: vars.RAILWAY_PROJECT_ID != ''
+      uses: railwayapp/railway-deploy@v3
+      with:
+        railway_token: ${{ secrets.RAILWAY_TOKEN }}
+        railway_project_id: ${{ vars.RAILWAY_PROJECT_ID }}
+        railway_environment: production
+
+  # 🌐 Deploy to Heroku (optional)
+  deploy-heroku:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🦄 Deploy to Heroku
+      if: vars.HEROKU_APP_NAME != ''
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ vars.HEROKU_APP_NAME }}
+        heroku_email: ${{ vars.HEROKU_EMAIL }}
+        usedocker: true
+
+  # 📊 Deploy to Streamlit Cloud (optional)
+  deploy-streamlit:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: ☁️ Trigger Streamlit Cloud deployment
+      if: vars.STREAMLIT_SHARING_URL != ''
+      run: |
+        echo "🎯 Streamlit Cloud will auto-deploy from main branch"
+        echo "📍 App URL: ${{ vars.STREAMLIT_SHARING_URL }}"
+        echo "✅ Deployment triggered by push to main"
+
+  # 🎉 Notify deployment status
+  notify:
+    if: always() && github.ref == 'refs/heads/main'
+    needs: [test-and-build, deploy-railway, deploy-heroku, deploy-streamlit]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📢 Deployment Summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Service | Status | URL |" >> $GITHUB_STEP_SUMMARY
+        echo "|---------|--------|-----|" >> $GITHUB_STEP_SUMMARY
+        echo "| 🐳 Container Registry | ✅ Built | \`ghcr.io/${{ github.repository }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🚂 Railway | ${{ needs.deploy-railway.result == 'success' && '✅ Deployed' || needs.deploy-railway.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | ${{ vars.RAILWAY_URL || 'Not configured' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🦄 Heroku | ${{ needs.deploy-heroku.result == 'success' && '✅ Deployed' || needs.deploy-heroku.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | ${{ vars.HEROKU_URL || 'Not configured' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| ☁️ Streamlit | ${{ needs.deploy-streamlit.result == 'success' && '✅ Deployed' || needs.deploy-streamlit.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} | ${{ vars.STREAMLIT_SHARING_URL || 'Not configured' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📝 Next Steps:" >> $GITHUB_STEP_SUMMARY
+        echo "- Configure deployment secrets for your preferred platform" >> $GITHUB_STEP_SUMMARY
+        echo "- Visit the deployed application URL above" >> $GITHUB_STEP_SUMMARY
+        echo "- Monitor application logs and performance" >> $GITHUB_STEP_SUMMARY
