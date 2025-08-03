@@ -311,27 +311,106 @@ def show_data_upload():
 
 
 def _show_data_preview(df: pd.DataFrame):
-    """Show data preview and information."""
-    # Show data preview
-    st.subheader("📊 Data Preview")
-    st.dataframe(df.head(10))
-    
-    # Data info
+    """Show paginated data preview and information."""
+    # Data info section (quick overview)
     st.subheader("ℹ️ Data Information")
-    col_info1, col_info2 = st.columns(2)
+    col_info1, col_info2, col_info3 = st.columns(3)
     with col_info1:
-        st.info(f"**Rows:** {len(df)}")
-        st.info(f"**Columns:** {len(df.columns)}")
+        st.metric("Total Records", f"{len(df):,}")
+        st.metric("Columns", len(df.columns))
     with col_info2:
-        st.info(f"**Date Range:** {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
-        st.info(f"**Total Amount:** ${df['amount'].sum():,.2f}")
+        st.metric("Date Range", f"{(df['date'].max() - df['date'].min()).days} days")
+        st.metric("Categories", df['category'].nunique())
+    with col_info3:
+        st.metric("Total Amount", f"${df['amount'].sum():,.2f}")
+        st.metric("Avg Amount", f"${df['amount'].mean():.2f}")
+    
+    # Paginated data preview
+    st.subheader("📊 Data Preview")
+    
+    # Pagination settings
+    records_per_page = 20
+    total_records = len(df)
+    total_pages = (total_records - 1) // records_per_page + 1 if total_records > 0 else 1
+    
+    # Page selection
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        current_page = st.selectbox(
+            "Select Page:",
+            options=list(range(1, total_pages + 1)),
+            format_func=lambda x: f"Page {x} of {total_pages}",
+            key="data_preview_page"
+        )
+    
+    # Calculate start and end indices
+    start_idx = (current_page - 1) * records_per_page
+    end_idx = min(start_idx + records_per_page, total_records)
+    
+    # Show current page data
+    if total_records > 0:
+        current_page_df = df.iloc[start_idx:end_idx].copy()
+        
+        # Format currency columns for better display
+        if 'amount' in current_page_df.columns:
+            current_page_df['amount'] = current_page_df['amount'].apply(lambda x: f"${x:.2f}")
+        
+        # Show the data
+        st.dataframe(
+            current_page_df,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Show pagination info
+        st.caption(f"Showing records {start_idx + 1}-{end_idx} of {total_records}")
+        
+        # Quick filter options
+        with st.expander("🔍 Quick Filters"):
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Show Recent Transactions"):
+                    # Show most recent 20 transactions
+                    recent_df = df.nlargest(20, 'date')
+                    st.dataframe(recent_df, use_container_width=True, hide_index=True)
+            
+            with col2:
+                if st.button("Show Largest Amounts"):
+                    # Show 20 largest transactions
+                    largest_df = df.nlargest(20, 'amount')
+                    largest_df['amount'] = largest_df['amount'].apply(lambda x: f"${x:.2f}")
+                    st.dataframe(largest_df, use_container_width=True, hide_index=True)
+    else:
+        st.warning("No data to display")
+
+@st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
+def _get_overview_data(df_hash: str, df_dict: dict) -> tuple:
+    """Cached function to compute overview data."""
+    # Reconstruct DataFrame from dictionary (for caching)
+    df = pd.DataFrame(df_dict)
+    df['date'] = pd.to_datetime(df['date'])
+    
+    analyzer = BillAnalyzer(df)
+    
+    # Get all the data we need
+    monthly_data = analyzer.get_monthly_spending()
+    category_data = analyzer.get_category_summary()
+    weekly_patterns = analyzer.get_weekly_patterns()
+    
+    return monthly_data, category_data, weekly_patterns
 
 def show_overview():
     """Overview dashboard page"""
     st.header("📊 Financial Overview")
     
     df = st.session_state.df
-    analyzer = BillAnalyzer(df)
+    
+    # Create a hash of the DataFrame for caching
+    df_hash = str(hash(pd.util.hash_pandas_object(df).sum()))
+    df_dict = df.to_dict('records')
+    
+    # Get cached data
+    monthly_data, category_data, weekly_patterns = _get_overview_data(df_hash, df_dict)
     
     # Key metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -357,15 +436,13 @@ def show_overview():
     col1, col2 = st.columns(2)
     
     with col1:
-        # Monthly spending
-        monthly_data = analyzer.get_monthly_spending()
+        # Monthly spending (using cached data)
         fig = px.bar(monthly_data, x='month', y='total_amount', 
                     title="Monthly Spending")
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        # Category distribution
-        category_data = analyzer.get_category_summary()
+        # Category distribution (using cached data)
         fig = px.pie(category_data, values='amount', names='category',
                     title="Spending by Category")
         st.plotly_chart(fig, use_container_width=True)

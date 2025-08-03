@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Dict, List, Tuple, Optional
 import calendar
+from functools import lru_cache
+import streamlit as st
 
 class BillAnalyzer:
     """Main analyzer class for financial data analysis."""
@@ -29,9 +31,10 @@ class BillAnalyzer:
         self.df['day_of_week'] = self.df['date'].dt.day_name()
         self.df['week'] = self.df['date'].dt.to_period('W')
         
-    def get_monthly_spending(self) -> pd.DataFrame:
+    @st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
+    def get_monthly_spending(_self) -> pd.DataFrame:
         """Get monthly spending summary."""
-        monthly = self.df.groupby('month').agg({
+        monthly = _self.df.groupby('month').agg({
             'amount': ['sum', 'mean', 'count'],
             'category': 'nunique'
         }).round(2)
@@ -42,9 +45,10 @@ class BillAnalyzer:
         
         return monthly
     
-    def get_category_summary(self) -> pd.DataFrame:
+    @st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
+    def get_category_summary(_self) -> pd.DataFrame:
         """Get spending summary by category."""
-        category_summary = self.df.groupby('category').agg({
+        category_summary = _self.df.groupby('category').agg({
             'amount': ['sum', 'mean', 'count', 'std']
         }).round(2)
         
@@ -52,7 +56,7 @@ class BillAnalyzer:
         category_summary = category_summary.reset_index()
         
         # Calculate percentage
-        total_amount = self.df['amount'].sum()
+        total_amount = _self.df['amount'].sum()
         category_summary['percentage'] = (category_summary['amount'] / total_amount * 100).round(1)
         
         # Sort by total amount
@@ -159,18 +163,40 @@ class BillAnalyzer:
     
     def compare_categories(self, categories: List[str]) -> go.Figure:
         """Compare selected categories."""
-        filtered_df = self.df[self.df['category'].isin(categories)]
+        # Ensure categories is a list of strings and handle edge cases
+        if not categories:
+            categories = []
+        
+        # Convert all categories to strings and filter out None/empty values
+        safe_categories = [str(cat) for cat in categories if cat is not None and str(cat).strip()]
+        
+        if not safe_categories:
+            # Return empty chart if no valid categories
+            fig = px.bar(title="No categories selected for comparison")
+            return fig
+        
+        filtered_df = self.df[self.df['category'].isin(safe_categories)]
+        
+        if filtered_df.empty:
+            # Return empty chart if no data for selected categories
+            fig = px.bar(title=f"No data found for categories: {', '.join(safe_categories)}")
+            return fig
         
         # Monthly comparison
         comparison_data = filtered_df.groupby(['month', 'category'])['amount'].sum().reset_index()
         comparison_data['month'] = comparison_data['month'].astype(str)
+        
+        # Create title with safe category names
+        category_title = ", ".join(safe_categories)
+        if len(category_title) > 50:  # Truncate long titles
+            category_title = category_title[:47] + "..."
         
         fig = px.bar(
             comparison_data,
             x='month',
             y='amount',
             color='category',
-            title=f'Category Comparison: {", ".join(categories)}',
+            title=f'Category Comparison: {category_title}',
             barmode='group'
         )
         
