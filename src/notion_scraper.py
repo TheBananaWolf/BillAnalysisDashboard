@@ -44,12 +44,19 @@ class NotionScraper:
         
     def setup_driver(self):
         """Setup Chrome WebDriver with appropriate options."""
+        logger.info("🚀 Setting up Chrome WebDriver...")
+        
         chrome_options = Options()
+        
         # Set binary location for Chromium inside Docker
-        chrome_options.binary_location = os.getenv('CHROME_BIN', '/usr/bin/chromium')
+        chrome_bin = os.getenv('CHROME_BIN', '/usr/bin/chromium')
+        chrome_options.binary_location = chrome_bin
+        logger.info(f"🔧 Chrome binary: {chrome_bin}")
+        logger.info(f"🔧 Chrome binary exists: {os.path.exists(chrome_bin)}")
         
         if self.headless:
             chrome_options.add_argument("--headless")
+            logger.info("🔧 Running in headless mode")
         
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
@@ -60,30 +67,46 @@ class NotionScraper:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
+        logger.info(f"🔧 Chrome options configured: {len(chrome_options.arguments)} arguments")
+        
         try:
             # Try to use system chromedriver path
             chromedriver_path = os.getenv('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
+            logger.info(f"🔧 ChromeDriver path: {chromedriver_path}")
             
             # Check if chromedriver exists
             if os.path.exists(chromedriver_path):
+                logger.info(f"✅ ChromeDriver found at {chromedriver_path}")
+                logger.info(f"🔧 ChromeDriver executable: {os.access(chromedriver_path, os.X_OK)}")
                 from selenium.webdriver.chrome.service import Service
                 service = Service(chromedriver_path)
+                logger.info("🔧 Creating Chrome WebDriver with system driver...")
                 self.driver = webdriver.Chrome(service=service, options=chrome_options)
             else:
+                logger.warning(f"⚠️ ChromeDriver not found at {chromedriver_path}, trying webdriver-manager")
                 # Fallback to webdriver-manager
                 try:
                     from webdriver_manager.chrome import ChromeDriverManager
+                    logger.info("🔧 Downloading ChromeDriver with webdriver-manager...")
                     service = Service(ChromeDriverManager().install())
                     self.driver = webdriver.Chrome(service=service, options=chrome_options)
-                except:
+                    logger.info("✅ Chrome WebDriver created with webdriver-manager")
+                except Exception as wdm_error:
+                    logger.error(f"💥 webdriver-manager failed: {wdm_error}")
+                    logger.info("🔧 Last resort: trying without specifying service...")
                     # Last resort: try without specifying service
                     self.driver = webdriver.Chrome(options=chrome_options)
             
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            logger.info("Chrome driver setup successful")
+            logger.info("✅ Chrome driver setup successful!")
+            logger.info(f"✅ Browser version: {self.driver.capabilities.get('browserVersion', 'Unknown')}")
+            logger.info(f"✅ ChromeDriver version: {self.driver.capabilities.get('chrome', {}).get('chromedriverVersion', 'Unknown')}")
             
         except Exception as e:
-            logger.error(f"Failed to setup Chrome driver: {e}")
+            logger.error(f"💥 Failed to setup Chrome driver: {e}")
+            logger.error(f"💥 Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"💥 Full traceback: {traceback.format_exc()}")
             raise
     
     def scrape_notion_page(self, url: str) -> pd.DataFrame:
@@ -96,25 +119,43 @@ class NotionScraper:
         Returns:
             pd.DataFrame: Extracted bill data
         """
-        logger.info(f"Starting to scrape Notion page: {url}")
+        logger.info(f"🔍 DETAILED DEBUG: Starting to scrape Notion page: {url}")
+        
+        # Environment debugging
+        import os
+        import platform
+        logger.info(f"🖥️ Environment: OS={platform.system()}, Python={platform.python_version()}")
+        logger.info(f"🔧 Chrome bin: {os.getenv('CHROME_BIN', 'Not set')}")
+        logger.info(f"🔧 ChromeDriver: {os.getenv('CHROMEDRIVER_PATH', 'Not set')}")
         
         try:
             # Try different scraping methods
+            logger.info("📡 Attempting Selenium scraping...")
             df = self._scrape_with_selenium(url)
+            logger.info(f"📡 Selenium result: {len(df) if not df.empty else 'EMPTY'} rows")
             
             if df.empty:
-                logger.info("Selenium scraping failed, trying requests method")
+                logger.warning("⚠️ Selenium scraping failed, trying requests method")
                 df = self._scrape_with_requests(url)
+                logger.info(f"📡 Requests result: {len(df) if not df.empty else 'EMPTY'} rows")
             
             if df.empty:
-                logger.warning("Both scraping methods failed, creating sample data")
+                logger.error("❌ Both scraping methods failed, creating sample data")
                 df = self._create_fallback_data()
+                logger.info(f"📝 Fallback result: {len(df)} sample rows")
+            else:
+                logger.info(f"✅ Successfully scraped {len(df)} rows from Notion")
             
-            return self._process_scraped_data(df)
+            result = self._process_scraped_data(df)
+            logger.info(f"🔄 After processing: {len(result)} rows")
+            return result
             
         except Exception as e:
-            logger.error(f"Error scraping Notion page: {e}")
-            logger.info("Creating fallback sample data")
+            logger.error(f"💥 CRITICAL ERROR scraping Notion page: {e}")
+            logger.error(f"💥 Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"💥 Traceback: {traceback.format_exc()}")
+            logger.info("📝 Creating fallback sample data due to critical error")
             return self._create_fallback_data()
     
     def _scrape_with_selenium(self, url: str) -> pd.DataFrame:
