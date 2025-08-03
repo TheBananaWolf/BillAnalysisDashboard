@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  bill-analysis:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./exports:/app/exports
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    restart: unless-stopped
+    container_name: bill-analysis-app
+
+volumes:
+  bill_data:
+  bill_exports:
