@@ -159,7 +159,7 @@ jobs:
   # 🎉 Notify deployment status
   notify:
     if: always() && github.ref == 'refs/heads/main'
-    needs: [test-and-build, deploy-railway, deploy-heroku, deploy-streamlit]
+    needs: [test-and-build, deploy-streamlit]
     runs-on: ubuntu-latest
     
     steps:
