@@ -28,6 +28,7 @@ from src.data_processor import DataProcessor
 from src.analyzer import BillAnalyzer
 from src.visualizer import Visualizer
 from src.insights_generator import InsightsGenerator
+from src.data_cleanup import start_data_cleanup, get_data_info, manual_cleanup
 
 def main():
     """Main Streamlit application"""
@@ -63,11 +64,19 @@ def main():
         st.session_state.data_loaded = False
         st.session_state.df = None
     
+    # Initialize data cleanup (auto-remove files older than 1 hour)
+    if 'cleanup_started' not in st.session_state:
+        try:
+            start_data_cleanup()
+            st.session_state.cleanup_started = True
+        except Exception as e:
+            logger.warning(f"Could not start data cleanup: {e}")
+    
     # Sidebar
     st.sidebar.header("📊 Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["Data Upload", "Overview", "Spending Analysis", "Category Analysis", "Trends", "Insights", "Export Reports", "🐛 Debug Info"]
+        ["Data Upload", "Overview", "Spending Analysis", "Category Analysis", "Trends", "Insights", "Export Reports"]
     )
     
     if page == "Data Upload":
@@ -84,8 +93,6 @@ def main():
         show_insights()
     elif page == "Export Reports" and st.session_state.data_loaded:
         show_export_reports()
-    elif page == "🐛 Debug Info":
-        show_debug_info()
     else:
         if not st.session_state.data_loaded:
             st.warning("Please upload your bill data first in the 'Data Upload' section.")
@@ -158,7 +165,7 @@ def show_data_upload():
                                     st.success(f"✅ Successfully loaded {len(df)} REAL transactions from Notion!")
                                 elif is_sample or data_source in ['sample', 'sample_fallback']:
                                     st.error(f"❌ Notion scraping failed - showing SAMPLE data instead!")
-                                    st.warning("🔍 The data below is NOT your real Notion data. Use the '🐛 Debug Info' page to see why scraping failed.")
+                                    st.warning("🔍 The data below is NOT your real Notion data. Check the browser console or logs for scraping errors.")
                                     
                                     # Environment-specific guidance
                                     from src.notion_scraper import NotionScraper
@@ -206,6 +213,7 @@ def show_data_upload():
                                     filename = f"notion_bills_{timestamp}.csv"
                                     df.to_csv(f"data/{filename}", index=False)
                                     st.info(f"💾 Data saved to: data/{filename}")
+                                    st.caption("🗑️ Files are automatically cleaned up after 1 hour")
                                 except Exception as save_error:
                                     logger.warning(f"Could not save data file: {save_error}")
                                     # Don't show error to user, saving is optional
@@ -651,141 +659,7 @@ def show_export_reports():
             # This would generate and save chart images
             st.info("Chart export feature would be implemented here")
 
-def show_debug_info():
-    """Debug information page to help troubleshoot cloud vs local issues"""
-    st.header("🐛 Debug Information")
-    
-    # Environment Information
-    st.subheader("🖥️ Environment Information")
-    
-    import platform
-    import os
-    import sys
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**System Information:**")
-        st.write(f"• OS: {platform.system()} {platform.release()}")
-        st.write(f"• Platform: {platform.platform()}")
-        st.write(f"• Architecture: {platform.architecture()[0]}")
-        st.write(f"• Python: {platform.python_version()}")
-        st.write(f"• Streamlit: {st.__version__}")
-    
-    with col2:
-        st.write("**Chrome Environment:**")
-        chrome_bin = os.getenv('CHROME_BIN', 'Not set')
-        chromedriver_path = os.getenv('CHROMEDRIVER_PATH', 'Not set')
-        st.write(f"• CHROME_BIN: {chrome_bin}")
-        st.write(f"• CHROMEDRIVER_PATH: {chromedriver_path}")
-        
-        if chrome_bin != 'Not set':
-            st.write(f"• Chrome binary exists: {os.path.exists(chrome_bin)}")
-        if chromedriver_path != 'Not set':
-            st.write(f"• ChromeDriver exists: {os.path.exists(chromedriver_path)}")
-    
-    # Test Notion Scraping with Detailed Logs
-    st.subheader("🧪 Test Notion Scraping")
-    
-    if st.button("🔍 Test Notion Scraper (Detailed Logs)"):
-        test_url = "https://opposite-wallet-8b6.notion.site/Bill-242d20f0d6578090af3ec52595e2d828"
-        
-        with st.spinner("Testing Notion scraper..."):
-            try:
-                # Import and test the scraper
-                from src.notion_scraper import NotionScraper
-                
-                # Capture logs in a string
-                import io
-                import logging
-                
-                # Create string buffer for logs
-                log_capture_string = io.StringIO()
-                log_handler = logging.StreamHandler(log_capture_string)
-                log_handler.setLevel(logging.DEBUG)
-                
-                # Add handler to logger
-                scraper_logger = logging.getLogger('src.notion_scraper')
-                scraper_logger.addHandler(log_handler)
-                scraper_logger.setLevel(logging.DEBUG)
-                
-                # Test the scraper
-                scraper = NotionScraper()
-                result = scraper.scrape_notion_page(test_url)
-                
-                # Get logs
-                log_contents = log_capture_string.getvalue()
-                
-                # Remove handler
-                scraper_logger.removeHandler(log_handler)
-                
-                # Display results
-                st.success(f"✅ Scraper test completed! Found {len(result)} rows")
-                
-                if '_data_source' in result.columns:
-                    data_source = result['_data_source'].iloc[0] if len(result) > 0 else 'unknown'
-                    if data_source == 'notion':
-                        st.success("🎉 Successfully scraped REAL data from Notion!")
-                    else:
-                        st.warning(f"⚠️ Scraper fell back to sample data (source: {data_source})")
-                
-                # Show detailed logs
-                st.subheader("📋 Detailed Logs")
-                st.text_area("Scraper Logs:", log_contents, height=400)
-                
-                # Show data preview
-                if not result.empty:
-                    st.subheader("📊 Scraped Data Preview")
-                    if '_data_source' in result.columns:
-                        result = result.drop('_data_source', axis=1)
-                    st.dataframe(result.head(10))
-                
-            except Exception as e:
-                st.error(f"❌ Error testing Notion scraper: {e}")
-                import traceback
-                st.text_area("Error Details:", traceback.format_exc(), height=200)
-    
-    # Data Source Comparison
-    st.subheader("📊 Data Source Comparison")
-    
-    if st.button("📈 Compare Sample vs Notion Data"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Sample Data:**")
-            from src.data_processor import DataProcessor
-            processor = DataProcessor()
-            sample_data = processor.create_sample_data(10)
-            st.dataframe(sample_data.head())
-            st.write(f"Rows: {len(sample_data)}")
-        
-        with col2:
-            st.write("**Current Session Data:**")
-            if st.session_state.data_loaded and st.session_state.df is not None:
-                st.dataframe(st.session_state.df.head())
-                st.write(f"Rows: {len(st.session_state.df)}")
-            else:
-                st.warning("No data loaded in current session")
-    
-    # Tips for Troubleshooting
-    st.subheader("💡 Troubleshooting Tips")
-    
-    st.info("""
-    **If you see different data between cloud and local:**
-    
-    1. **Check the "Test Notion Scraper" logs above** - this will show exactly what's happening
-    2. **Look for Chrome/ChromeDriver errors** in the detailed logs
-    3. **Compare data sources** - real Notion data vs sample data
-    4. **Network issues** - cloud platforms may have firewall restrictions
-    5. **Environment differences** - Chrome installation may differ between local and cloud
-    
-    **Common Cloud Issues:**
-    - Chrome binary not found or not executable
-    - ChromeDriver version incompatibility  
-    - Network restrictions blocking Notion access
-    - Memory/resource limitations
-    - Missing dependencies
-    """)
+
 
 
 if __name__ == "__main__":
