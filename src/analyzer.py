@@ -274,7 +274,7 @@ class BillAnalyzer:
         category_stats = self.get_category_summary()
         
         # Assume 10-20% savings potential for discretionary categories
-        discretionary_categories = ['Food & Dining', 'Entertainment', 'Shopping']
+        discretionary_categories = ['Food', 'Entertainment', 'Shopping']
         
         savings_potential = {}
         total_potential = 0

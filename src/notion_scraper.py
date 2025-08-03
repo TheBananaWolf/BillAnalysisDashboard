@@ -283,7 +283,6 @@ class NotionScraper:
             lines = text_content.split('\n')
             
             current_date = None
-            current_year = "2024"  # Default year
             
             # Look for patterns that might indicate financial data
             for line in lines:
@@ -291,11 +290,20 @@ class NotionScraper:
                 if not line:
                     continue
                 
-                # Check if line is a date header (like "08/01:" or "08/02:")
-                date_header_match = re.match(r'^(\d{2}/\d{2})[:：]\s*$', line)
-                if date_header_match:
-                    current_date = f"{current_year}-{date_header_match.group(1).replace('/', '-')}"
-                    logger.info(f"Found date section: {current_date}")
+                # Check if line is a date header (like "2025/08/01:" or "08/01:")
+                # First try full date format YYYY/MM/DD:
+                full_date_match = re.match(r'^(\d{4}/\d{2}/\d{2})[:：]\s*$', line)
+                if full_date_match:
+                    current_date = full_date_match.group(1).replace('/', '-')
+                    logger.info(f"Found full date section: {current_date}")
+                    continue
+                
+                # Fallback to short date format MM/DD: (assume current year)
+                short_date_match = re.match(r'^(\d{2}/\d{2})[:：]\s*$', line)
+                if short_date_match:
+                    current_year = str(datetime.now().year)
+                    current_date = f"{current_year}-{short_date_match.group(1).replace('/', '-')}"
+                    logger.info(f"Found short date section: {current_date}")
                     continue
                 
                 # Try to parse line as transaction data
@@ -398,13 +406,19 @@ class NotionScraper:
             if not line:
                 return None
             
-            # Pattern for your specific format: "description: amount T" or "description: amount"
-            # Examples: "一家川菜：59 T", "Beer: 9.8", "中餐：56 T"
+            # Pattern for your specific format: "description: amount [T] category" 
+            # Examples: "一家川菜：59 Food", "Fob Copy：30 T Utilities", "中餐：56 T Food"
             patterns = [
-                # Numbered format: "1: description: amount T" or "1. description: amount T"
+                # Numbered format with category: "1: description: amount [T] category"
+                r'^\d+[:.：]\s*(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*([A-Za-z]+)\s*$',
+                
+                # Direct format with category: "description: amount [T] category"  
+                r'^(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*([A-Za-z]+)\s*$',
+                
+                # Fallback: Numbered format without category: "1: description: amount T"
                 r'^\d+[:.：]\s*(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*$',
                 
-                # Direct format: "description: amount T" (with optional T suffix)
+                # Fallback: Direct format without category: "description: amount T"
                 r'^(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*$',
                 
                 # Standard patterns for other formats
@@ -420,7 +434,25 @@ class NotionScraper:
                 if match:
                     groups = match.groups()
                     
-                    if i <= 1:  # Your specific format
+                    if i <= 1:  # Your specific format with category
+                        desc_val = groups[0].strip()
+                        amount_val = float(groups[1])
+                        category_val = groups[2].strip() if len(groups) > 2 else None
+                        
+                        # Skip if description looks like a date header
+                        if re.match(r'^\d{2}/\d{2}', desc_val):
+                            continue
+                        
+                        # Clean up description - remove extra spaces and clean formatting
+                        desc_val = re.sub(r'\s+', ' ', desc_val).strip()
+                            
+                        return {
+                            'description': desc_val,
+                            'amount': amount_val,
+                            'category': category_val,
+                            'date': None  # Will be filled in by context
+                        }
+                    elif i <= 3:  # Your specific format without category (fallback)
                         desc_val = groups[0].strip()
                         amount_val = float(groups[1])
                         

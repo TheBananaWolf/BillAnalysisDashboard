@@ -160,45 +160,60 @@ class DataProcessor:
         """
         categories = []
         
-        # Define category patterns
+        # Define category patterns based on user's actual Notion categories
+        # User's categories: Food, Utilities, Grocery, Bank
         category_patterns = {
-            'Food & Dining': [
+            'Food': [
                 r'restaurant', r'cafe', r'coffee', r'food', r'pizza', r'burger',
                 r'mcdonald', r'subway', r'starbucks', r'dining', r'lunch', r'dinner',
                 r'breakfast', r'takeout', r'delivery', r'uber eats', r'doordash',
-                r'grubhub', r'diner', r'bistro', r'kitchen', r'grill'
+                r'grubhub', r'diner', r'bistro', r'kitchen', r'grill', r'bar', r'pub',
+                r'beer', r'wine', r'alcohol', r'drink', r'beverage', r'soda', r'juice',
+                r'tea', r'milk', r'water', r'ice', r'snack', r'bread', r'cake',
+                r'mocha', r'latte', r'espresso', r'cappuccino',
+                # Chinese terms  
+                r'川菜', r'中餐', r'餐厅', r'饭店', r'咖啡', r'茶', r'酒', r'啤酒',
+                r'食物', r'饮料', r'小吃', r'面包', r'蛋糕', r'奶茶', r'火锅', r'烧烤',
+                # Specific items from user data
+                r'fob', r'fob copy'
             ],
-            'Groceries': [
+            'Grocery': [
                 r'grocery', r'supermarket', r'walmart', r'target', r'costco',
                 r'whole foods', r'safeway', r'kroger', r'publix', r'trader joe',
-                r'market', r'mart', r'store'
+                r'market', r'mart', r'store', r'vegetables', r'fruits', r'meat',
+                r'dairy', r'groceries', r'food store',
+                # Specific items from user data
+                r't and t', r'tnt'
             ],
+            'Utilities': [
+                r'electric', r'electricity', r'water', r'sewer', r'gas bill',
+                r'internet', r'cable', r'phone', r'mobile', r'utility', r'bill',
+                r'service', r'maintenance', r'repair',
+                # Home & furniture items (user categorizes these as utilities)
+                r'ikea', r'chair', r'desk', r'table', r'bed', r'sofa', r'furniture',
+                r'home', r'house', r'apartment', r'decor', r'lamp', r'shelf',
+                r'cabinet', r'dresser', r'mattress', r'pillow', r'blanket'
+            ],
+            'Bank': [
+                r'bank', r'atm', r'fee', r'charge', r'interest', r'loan',
+                r'credit card', r'insurance', r'investment', r'transfer', r'payment',
+                r'paypower', r'ppp', r'financial', r'savings', r'credit', r'debt'
+            ],
+            # Additional categories for other transactions
             'Transportation': [
                 r'gas', r'fuel', r'shell', r'exxon', r'chevron', r'bp',
                 r'uber', r'lyft', r'taxi', r'metro', r'bus', r'train',
                 r'parking', r'toll', r'car wash', r'auto'
             ],
             'Shopping': [
-                r'amazon', r'ebay', r'mall', r'shop', r'store', r'retail',
+                r'amazon', r'ebay', r'mall', r'shop', r'retail',
                 r'clothing', r'shoes', r'fashion', r'electronics', r'best buy',
                 r'apple store', r'home depot', r'lowes'
             ],
             'Entertainment': [
                 r'movie', r'theater', r'cinema', r'netflix', r'spotify',
                 r'game', r'entertainment', r'music', r'concert', r'show',
-                r'bar', r'club', r'pub'
-            ],
-            'Utilities': [
-                r'electric', r'electricity', r'water', r'sewer', r'gas bill',
-                r'internet', r'cable', r'phone', r'mobile', r'utility'
-            ],
-            'Healthcare': [
-                r'medical', r'doctor', r'hospital', r'pharmacy', r'dentist',
-                r'clinic', r'health', r'medicine', r'prescription'
-            ],
-            'Finance': [
-                r'bank', r'atm', r'fee', r'charge', r'interest', r'loan',
-                r'credit card', r'insurance', r'investment'
+                r'club'
             ]
         }
         
@@ -236,29 +251,41 @@ class DataProcessor:
         
         dates = pd.date_range(start=start_date, end=end_date, periods=num_transactions)
         
-        # Categories and their typical amounts
+        # Categories and their typical amounts (based on user's actual categories)
         categories_data = {
-            'Food & Dining': {'mean': 25, 'std': 15, 'min': 5, 'max': 150},
-            'Groceries': {'mean': 75, 'std': 30, 'min': 20, 'max': 200},
+            'Food': {'mean': 25, 'std': 15, 'min': 5, 'max': 150},
+            'Grocery': {'mean': 75, 'std': 30, 'min': 20, 'max': 200},
+            'Utilities': {'mean': 120, 'std': 30, 'min': 80, 'max': 450},  # Higher max for furniture
+            'Bank': {'mean': 50, 'std': 40, 'min': 5, 'max': 300},
             'Transportation': {'mean': 35, 'std': 20, 'min': 10, 'max': 100},
             'Shopping': {'mean': 85, 'std': 50, 'min': 15, 'max': 500},
             'Entertainment': {'mean': 40, 'std': 25, 'min': 10, 'max': 150},
-            'Utilities': {'mean': 120, 'std': 30, 'min': 80, 'max': 250},
-            'Healthcare': {'mean': 95, 'std': 60, 'min': 20, 'max': 400},
             'Other': {'mean': 50, 'std': 40, 'min': 5, 'max': 300}
         }
         
-        # Sample descriptions for each category
+        # Sample descriptions for each category (based on user's actual data)
         descriptions_data = {
-            'Food & Dining': [
+            'Food': [
+                '一家川菜', 'Fob Copy', 'Beer', 'mocha', '中餐', 'Soda', 'Ice',
                 'McDonald\'s #1234', 'Starbucks Coffee', 'Pizza Palace',
                 'Local Restaurant', 'Subway Sandwiches', 'Coffee Shop',
                 'Burger King', 'Chinese Takeout', 'Lunch Cafe'
             ],
-            'Groceries': [
-                'Walmart Supercenter', 'Target Store', 'Whole Foods Market',
+            'Grocery': [
+                't and t', 'Walmart Supercenter', 'Target Store', 'Whole Foods Market',
                 'Local Grocery Store', 'Costco Wholesale', 'Safeway',
                 'Trader Joe\'s', 'Kroger', 'Publix'
+            ],
+            'Utilities': [
+                'Ikea', 'Chair', 'Desk', 'Electric Company', 'Water Department', 
+                'Internet Provider', 'Cable TV', 'Mobile Phone', 'Gas Company',
+                'Utility Payment', 'Phone Bill', 'Internet Bill', 'Furniture Store',
+                'Home Improvement', 'Appliance Store'
+            ],
+            'Bank': [
+                'PayPower', 'PPP', 'Bank Fee', 'ATM Withdrawal', 'Service Charge',
+                'Transfer Fee', 'Account Maintenance', 'Wire Transfer',
+                'Credit Card Payment', 'Loan Payment', 'Investment Transfer'
             ],
             'Transportation': [
                 'Shell Gas Station', 'Uber Trip', 'Metro Transit',
@@ -275,18 +302,7 @@ class DataProcessor:
                 'Concert Tickets', 'Sports Bar', 'Gaming Store',
                 'Streaming Service', 'Music Store', 'Entertainment Venue'
             ],
-            'Utilities': [
-                'Electric Company', 'Water Department', 'Internet Provider',
-                'Cable TV', 'Mobile Phone', 'Gas Company',
-                'Utility Payment', 'Phone Bill', 'Internet Bill'
-            ],
-            'Healthcare': [
-                'Doctor Visit', 'Pharmacy', 'Dental Clinic',
-                'Medical Center', 'Health Insurance', 'Prescription',
-                'Hospital', 'Clinic Visit', 'Medical Supply'
-            ],
             'Other': [
-                'Bank Fee', 'ATM Withdrawal', 'Service Charge',
                 'Miscellaneous', 'Unknown Charge', 'Other Expense',
                 'Fee Payment', 'Service Fee', 'General Purchase'
             ]
@@ -296,7 +312,8 @@ class DataProcessor:
         
         for i, date in enumerate(dates):
             # Choose category (weighted towards more common expenses)
-            category_weights = [0.2, 0.15, 0.15, 0.15, 0.1, 0.1, 0.08, 0.07]
+            # Weights: Food, Grocery, Utilities, Bank, Transportation, Shopping, Entertainment, Other
+            category_weights = [0.25, 0.2, 0.15, 0.1, 0.1, 0.1, 0.05, 0.05]
             category = np.random.choice(list(categories_data.keys()), p=category_weights)
             
             # Generate amount based on category

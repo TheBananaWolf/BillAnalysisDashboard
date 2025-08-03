@@ -226,12 +226,18 @@ class InsightsGenerator:
         for category, total in category_totals.head(3).items():
             monthly_avg = total / (len(self.df['month'].unique()) or 1)
             
-            if category == 'Food & Dining' and monthly_avg > 300:
-                insights.append("Consider meal planning and cooking at home to reduce food & dining expenses.")
+            if category == 'Food' and monthly_avg > 300:
+                insights.append("Consider meal planning and cooking at home to reduce food expenses.")
             elif category == 'Shopping' and monthly_avg > 400:
                 insights.append("Implement a waiting period before non-essential purchases to reduce impulse buying.")
             elif category == 'Transportation' and monthly_avg > 200:
                 insights.append("Consider carpooling, public transit, or combining trips to reduce transportation costs.")
+            elif category == 'Utilities' and monthly_avg > 200:
+                insights.append("Review utility bills and furniture purchases - consider energy efficiency and buying used items.")
+            elif category == 'Grocery' and monthly_avg > 400:
+                insights.append("Use grocery coupons, buy generic brands, and meal plan to reduce grocery expenses.")
+            elif category == 'Bank' and monthly_avg > 100:
+                insights.append("Review bank fees and consider switching to accounts with lower fees or better terms.")
         
         # Seasonal savings opportunities
         if len(self.df['month'].unique()) >= 6:
