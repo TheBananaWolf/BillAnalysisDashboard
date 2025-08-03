@@ -76,11 +76,13 @@ def main():
     st.sidebar.header("📊 Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["Data Upload", "Overview", "Spending Analysis", "Category Analysis", "Trends", "Insights", "Export Reports"]
+        ["Data Upload", "Data Preview", "Overview", "Spending Analysis", "Category Analysis", "Trends", "Insights", "Export Reports"]
     )
     
     if page == "Data Upload":
         show_data_upload()
+    elif page == "Data Preview" and st.session_state.data_loaded:
+        show_data_preview_page()
     elif page == "Overview" and st.session_state.data_loaded:
         show_overview()
     elif page == "Spending Analysis" and st.session_state.data_loaded:
@@ -150,97 +152,122 @@ def show_data_upload():
             if st.button("🔄 Scrape Data from Notion", type="primary"):
                 if notion_url:
                     try:
-                        with st.spinner("Scraping data from Notion... This may take a few moments."):
-                            processor = DataProcessor()
-                            df = processor.load_from_notion_url(notion_url)
+                        # Show progress steps to user for better experience
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        status_text.text("🚀 Setting up Chrome browser (optimized for speed)...")
+                        progress_bar.progress(20)
+                        
+                        processor = DataProcessor()
+                        
+                        status_text.text("🌐 Loading Notion page...")
+                        progress_bar.progress(50)
+                        
+                        df = processor.load_from_notion_url(notion_url)
+                        
+                        status_text.text("📊 Processing and categorizing transactions...")
+                        progress_bar.progress(90)
+                        
+                        # Small delay to show completion
+                        import time
+                        time.sleep(0.3)
+                        
+                        progress_bar.progress(100)
+                        status_text.text("✅ Scraping completed successfully!")
+                        
+                        # Clean up progress indicators after a brief moment
+                        time.sleep(0.5)
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        if not df.empty:
+                            st.success(f"✅ Data scraped successfully! {len(df)} transactions found.")
                             
-                            if not df.empty:
-                                st.success(f"✅ Data scraped successfully! {len(df)} transactions found.")
+                            # Check data source and show appropriate message
+                            data_source = df.get('_data_source', ['unknown']).iloc[0] if '_data_source' in df.columns else 'unknown'
+                            is_sample = '_is_sample_data' in df.columns and df['_is_sample_data'].iloc[0]
+                            
+                            if data_source == 'notion' and not is_sample:
+                                st.success(f"✅ Successfully loaded {len(df)} REAL transactions from Notion!")
+                            elif is_sample or data_source in ['sample', 'sample_fallback']:
+                                st.error(f"❌ Notion scraping failed - showing SAMPLE data instead!")
+                                st.warning("🔍 The data below is NOT your real Notion data. Check the browser console or logs for scraping errors.")
                                 
-                                # Check data source and show appropriate message
-                                data_source = df.get('_data_source', ['unknown']).iloc[0] if '_data_source' in df.columns else 'unknown'
-                                is_sample = '_is_sample_data' in df.columns and df['_is_sample_data'].iloc[0]
+                                # Environment-specific guidance
+                                from src.notion_scraper import NotionScraper
+                                temp_scraper = NotionScraper()
+                                env = temp_scraper._detect_environment()
                                 
-                                if data_source == 'notion' and not is_sample:
-                                    st.success(f"✅ Successfully loaded {len(df)} REAL transactions from Notion!")
-                                elif is_sample or data_source in ['sample', 'sample_fallback']:
-                                    st.error(f"❌ Notion scraping failed - showing SAMPLE data instead!")
-                                    st.warning("🔍 The data below is NOT your real Notion data. Check the browser console or logs for scraping errors.")
-                                    
-                                    # Environment-specific guidance
-                                    from src.notion_scraper import NotionScraper
-                                    temp_scraper = NotionScraper()
-                                    env = temp_scraper._detect_environment()
-                                    
-                                    if env == 'streamlit_cloud':
-                                        st.info("🌐 **Streamlit Cloud detected**: Chrome setup optimized for cloud environment. Check debug logs for specific issues.")
-                                    elif env == 'docker':
-                                        st.info("🐳 **Docker environment detected**: Verify CHROME_BIN and CHROMEDRIVER_PATH are set correctly.")
-                                    else:
-                                        st.info("🖥️ **Local environment detected**: Ensure Chrome/Chromium is installed on your system.")
-                                    
-                                    # Add a clear sample data indicator
-                                    st.markdown("""
-                                    <div style="background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 4px solid #f44336;">
-                                    <strong>⚠️ WARNING:</strong> This is fake sample data, not your real transactions!
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                                if env == 'streamlit_cloud':
+                                    st.info("🌐 **Streamlit Cloud detected**: Chrome setup optimized for cloud environment. Check debug logs for specific issues.")
+                                elif env == 'docker':
+                                    st.info("🐳 **Docker environment detected**: Verify CHROME_BIN and CHROMEDRIVER_PATH are set correctly.")
                                 else:
-                                    st.info(f"ℹ️ Loaded {len(df)} transactions (source: {data_source})")
+                                    st.info("🖥️ **Local environment detected**: Ensure Chrome/Chromium is installed on your system.")
                                 
-                                # Remove the data source markers before storing
-                                df_clean = df.copy()
-                                for col in ['_data_source', '_is_sample_data']:
-                                    if col in df_clean.columns:
-                                        df_clean = df_clean.drop(col, axis=1)
-                                df = df_clean
-                                
-                                # Show column information
-                                st.info(f"📊 **Columns detected:** {', '.join(df.columns)}")
-                                
-                                # Show data preview
-                                _show_data_preview(df)
-                                
-                                # Store in session state
-                                st.session_state.df = df
-                                st.session_state.data_loaded = True
-                                
-                                # Optionally save scraped data (don't fail if directory doesn't exist)
-                                try:
-                                    import os
-                                    os.makedirs("data", exist_ok=True)
-                                    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                                    filename = f"notion_bills_{timestamp}.csv"
-                                    df.to_csv(f"data/{filename}", index=False)
-                                    st.info(f"💾 Data saved to: data/{filename}")
-                                    st.caption("🗑️ Files are automatically cleaned up after 1 hour")
-                                except Exception as save_error:
-                                    logger.warning(f"Could not save data file: {save_error}")
-                                    # Don't show error to user, saving is optional
-                                
+                                # Add a clear sample data indicator
+                                st.markdown("""
+                                <div style="background-color: #ffebee; padding: 10px; border-radius: 5px; border-left: 4px solid #f44336;">
+                                <strong>⚠️ WARNING:</strong> This is fake sample data, not your real transactions!
+                                </div>
+                                """, unsafe_allow_html=True)
                             else:
-                                st.warning("❌ No data could be extracted from the Notion page.")
+                                st.info(f"ℹ️ Loaded {len(df)} transactions (source: {data_source})")
+                            
+                            # Remove the data source markers before storing
+                            df_clean = df.copy()
+                            for col in ['_data_source', '_is_sample_data']:
+                                if col in df_clean.columns:
+                                    df_clean = df_clean.drop(col, axis=1)
+                            df = df_clean
+                            
+                            # Show column information
+                            st.info(f"📊 **Columns detected:** {', '.join(df.columns)}")
+                            
+                            # Show data preview
+                            _show_data_preview(df)
+                            
+                            # Store in session state
+                            st.session_state.df = df
+                            st.session_state.data_loaded = True
+                            
+                            # Optionally save scraped data (don't fail if directory doesn't exist)
+                            try:
+                                import os
+                                os.makedirs("data", exist_ok=True)
+                                timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                                filename = f"notion_bills_{timestamp}.csv"
+                                df.to_csv(f"data/{filename}", index=False)
+                                st.info(f"💾 Data saved to: data/{filename}")
+                                st.caption("🗑️ Files are automatically cleaned up after 1 hour")
+                            except Exception as save_error:
+                                logger.warning(f"Could not save data file: {save_error}")
+                                # Don't show error to user, saving is optional
+                        
+                        else:
+                            st.warning("❌ No data could be extracted from the Notion page.")
+                            
+                            # Show troubleshooting tips
+                            with st.expander("🔧 Troubleshooting Tips"):
+                                st.markdown("""
+                                **Common issues and solutions:**
                                 
-                                # Show troubleshooting tips
-                                with st.expander("🔧 Troubleshooting Tips"):
-                                    st.markdown("""
-                                    **Common issues and solutions:**
-                                    
-                                    1. **Page not accessible**: Make sure your Notion page is publicly shared
-                                       - Go to your Notion page → Click "Share" → Toggle "Share to web"
-                                    
-                                    2. **No table found**: Ensure your data is in a table format
-                                       - Use Notion's table/database block
-                                       - Include column headers
-                                    
-                                    3. **Wrong data format**: Check your column names
-                                       - Required: Date, Amount, Description
-                                       - Optional: Category, Account, Type
-                                    
-                                    4. **Alternative approach**: Export from Notion and upload as CSV
-                                       - In Notion: ··· menu → Export → CSV
-                                       - Then use the "Upload File" option above
-                                    """)
+                                1. **Page not accessible**: Make sure your Notion page is publicly shared
+                                   - Go to your Notion page → Click "Share" → Toggle "Share to web"
+                                
+                                2. **No table found**: Ensure your data is in a table format
+                                   - Use Notion's table/database block
+                                   - Include column headers
+                                
+                                3. **Wrong data format**: Check your column names
+                                   - Required: Date, Amount, Description
+                                   - Optional: Category, Account, Type
+                                
+                                4. **Alternative approach**: Export from Notion and upload as CSV
+                                   - In Notion: ··· menu → Export → CSV
+                                   - Then use the "Upload File" option above
+                                """)
                                 
                     except Exception as e:
                         error_msg = str(e)
@@ -659,7 +686,237 @@ def show_export_reports():
             # This would generate and save chart images
             st.info("Chart export feature would be implemented here")
 
-
+def show_data_preview_page():
+    """Dedicated Data Preview page with advanced pagination and filtering"""
+    st.header("📊 Data Preview")
+    
+    df = st.session_state.df.copy()
+    
+    # Data overview metrics
+    st.subheader("📈 Dataset Overview")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Records", f"{len(df):,}")
+    with col2:
+        st.metric("Date Range", f"{(df['date'].max() - df['date'].min()).days} days")
+    with col3:
+        st.metric("Total Amount", f"${df['amount'].sum():,.2f}")
+    with col4:
+        st.metric("Categories", df['category'].nunique())
+    
+    # Advanced filtering options
+    st.subheader("🔍 Filter Options")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Date range filter
+        min_date = df['date'].min().date()
+        max_date = df['date'].max().date()
+        date_range = st.date_input(
+            "Date Range:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            key="preview_date_range"
+        )
+    
+    with col2:
+        # Category filter
+        all_categories = ['All'] + sorted(df['category'].unique().tolist())
+        selected_category = st.selectbox(
+            "Category:",
+            options=all_categories,
+            key="preview_category"
+        )
+    
+    with col3:
+        # Amount range filter
+        min_amount = float(df['amount'].min())
+        max_amount = float(df['amount'].max())
+        amount_range = st.slider(
+            "Amount Range ($):",
+            min_value=min_amount,
+            max_value=max_amount,
+            value=(min_amount, max_amount),
+            step=0.01,
+            key="preview_amount_range"
+        )
+    
+    # Apply filters
+    filtered_df = df.copy()
+    
+    # Date filter
+    if len(date_range) == 2:
+        start_date, end_date = date_range
+        filtered_df = filtered_df[
+            (filtered_df['date'].dt.date >= start_date) & 
+            (filtered_df['date'].dt.date <= end_date)
+        ]
+    
+    # Category filter
+    if selected_category != 'All':
+        filtered_df = filtered_df[filtered_df['category'] == selected_category]
+    
+    # Amount filter
+    filtered_df = filtered_df[
+        (filtered_df['amount'] >= amount_range[0]) & 
+        (filtered_df['amount'] <= amount_range[1])
+    ]
+    
+    # Show filter results
+    if len(filtered_df) != len(df):
+        st.info(f"📊 Showing {len(filtered_df):,} records (filtered from {len(df):,} total)")
+    
+    # Search functionality
+    st.subheader("🔍 Search in Description")
+    search_term = st.text_input(
+        "Search descriptions:",
+        placeholder="Enter keywords to search in transaction descriptions...",
+        key="preview_search"
+    )
+    
+    if search_term:
+        search_mask = filtered_df['description'].str.contains(search_term, case=False, na=False)
+        filtered_df = filtered_df[search_mask]
+        st.info(f"🔍 Found {len(filtered_df):,} records matching '{search_term}'")
+    
+    # Sorting options
+    col1, col2 = st.columns(2)
+    with col1:
+        sort_column = st.selectbox(
+            "Sort by:",
+            options=['date', 'amount', 'category', 'description'],
+            index=0,
+            key="preview_sort_column"
+        )
+    
+    with col2:
+        sort_order = st.radio(
+            "Order:",
+            options=['Newest First', 'Oldest First'] if sort_column == 'date' 
+                   else ['Highest First', 'Lowest First'] if sort_column == 'amount'
+                   else ['A to Z', 'Z to A'],
+            horizontal=True,
+            key="preview_sort_order"
+        )
+    
+    # Apply sorting
+    ascending = sort_order in ['Oldest First', 'Lowest First', 'A to Z']
+    filtered_df = filtered_df.sort_values(sort_column, ascending=ascending)
+    
+    # Pagination
+    st.subheader("📄 Data Table")
+    
+    if len(filtered_df) > 0:
+        # Pagination settings
+        records_per_page = 20
+        total_records = len(filtered_df)
+        total_pages = (total_records - 1) // records_per_page + 1 if total_records > 0 else 1
+        
+        # Page navigation
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+        
+        with col1:
+            if st.button("⬅️ First", disabled=(st.session_state.get('preview_page', 1) <= 1)):
+                st.session_state.preview_page = 1
+                st.rerun()
+        
+        with col2:
+            if st.button("◀️ Prev", disabled=(st.session_state.get('preview_page', 1) <= 1)):
+                st.session_state.preview_page = max(1, st.session_state.get('preview_page', 1) - 1)
+                st.rerun()
+        
+        with col3:
+            # Initialize page in session state if not exists
+            if 'preview_page' not in st.session_state:
+                st.session_state.preview_page = 1
+            
+            current_page = st.selectbox(
+                "Page:",
+                options=list(range(1, total_pages + 1)),
+                index=st.session_state.preview_page - 1,
+                format_func=lambda x: f"Page {x} of {total_pages}",
+                key="preview_page_select"
+            )
+            
+            if current_page != st.session_state.preview_page:
+                st.session_state.preview_page = current_page
+                st.rerun()
+        
+        with col4:
+            if st.button("▶️ Next", disabled=(st.session_state.get('preview_page', 1) >= total_pages)):
+                st.session_state.preview_page = min(total_pages, st.session_state.get('preview_page', 1) + 1)
+                st.rerun()
+        
+        with col5:
+            if st.button("➡️ Last", disabled=(st.session_state.get('preview_page', 1) >= total_pages)):
+                st.session_state.preview_page = total_pages
+                st.rerun()
+        
+        # Calculate pagination
+        current_page = st.session_state.get('preview_page', 1)
+        start_idx = (current_page - 1) * records_per_page
+        end_idx = min(start_idx + records_per_page, total_records)
+        
+        # Show current page data
+        page_df = filtered_df.iloc[start_idx:end_idx].copy()
+        
+        # Format data for display
+        display_df = page_df.copy()
+        display_df['date'] = display_df['date'].dt.strftime('%Y-%m-%d')
+        display_df['amount'] = display_df['amount'].apply(lambda x: f"${x:,.2f}")
+        
+        # Display the table
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "date": st.column_config.TextColumn("Date", width="small"),
+                "amount": st.column_config.TextColumn("Amount", width="small"),
+                "category": st.column_config.TextColumn("Category", width="medium"),
+                "description": st.column_config.TextColumn("Description", width="large"),
+            }
+        )
+        
+        # Pagination info
+        st.caption(f"📄 Showing records {start_idx + 1}-{end_idx} of {total_records:,} | Page {current_page} of {total_pages}")
+        
+        # Quick stats for current page
+        if len(page_df) > 0:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Page Total", f"${page_df['amount'].sum():,.2f}")
+            with col2:
+                st.metric("Page Average", f"${page_df['amount'].mean():.2f}")
+            with col3:
+                st.metric("Records on Page", len(page_df))
+    
+    else:
+        st.warning("❌ No records match your current filters.")
+        st.info("💡 Try adjusting your filters or search terms to see more data.")
+    
+    # Export current view
+    st.subheader("💾 Export Current View")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📥 Download Filtered Data as CSV"):
+            csv = filtered_df.to_csv(index=False)
+            st.download_button(
+                label="⬇️ Download CSV",
+                data=csv,
+                file_name=f"bill_analysis_filtered_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+    
+    with col2:
+        if st.button("📋 Copy Current Page"):
+            page_csv = page_df.to_csv(index=False)
+            st.code(page_csv, language="csv")
+            st.caption("Copy the CSV data above to paste into Excel or other applications")
 
 
 if __name__ == "__main__":

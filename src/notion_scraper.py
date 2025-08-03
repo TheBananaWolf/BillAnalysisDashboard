@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 class NotionScraper:
     """Scrapes bill/transaction data from Notion pages."""
     
-    def __init__(self, headless: bool = True, timeout: int = 30):
+    def __init__(self, headless: bool = True, timeout: int = 10):
         """
-        Initialize the Notion scraper.
+        Initialize the Notion scraper - SPEED OPTIMIZED.
         
         Args:
             headless: Whether to run browser in headless mode
-            timeout: Maximum wait time for page elements
+            timeout: Maximum wait time for page elements (reduced for speed)
         """
         self.headless = headless
         self.timeout = timeout
@@ -69,13 +69,20 @@ class NotionScraper:
         from webdriver_manager.chrome import ChromeDriverManager
         from webdriver_manager.core.os_manager import ChromeType
         
-        # Streamlit Cloud optimized options
+        # Streamlit Cloud optimized options - SPEED OPTIMIZED
         options = Options()
-        options.add_argument("--headless")
+        options.add_argument("--headless=new")  # Use new headless mode for speed
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-web-security")
+        options.add_argument("--disable-features=VizDisplayCompositor")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-plugins")
+        options.add_argument("--disable-images")  # Don't load images for speed
+        options.add_argument("--disable-javascript")  # Disable JS for faster loading
+        options.add_argument("--window-size=1024,768")  # Smaller window for speed
+        options.add_argument("--page-load-strategy=eager")  # Don't wait for all resources
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
@@ -90,14 +97,14 @@ class NotionScraper:
         
         # Configure driver
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        driver.set_page_load_timeout(30)
-        driver.implicitly_wait(10)
+        driver.set_page_load_timeout(15)  # Reduced from 30 for speed
+        driver.implicitly_wait(5)  # Reduced from 10 for speed
         
         logger.info("✅ Streamlit Cloud driver created successfully!")
         return driver
 
     def _create_docker_driver(self):
-        """Create a Chrome driver for Docker environment."""
+        """Create a Chrome driver for Docker environment - SPEED OPTIMIZED."""
         logger.info("🐳 Creating Docker compatible driver...")
         
         options = Options()
@@ -109,12 +116,20 @@ class NotionScraper:
             logger.info(f"🔧 Using Chrome binary: {chrome_bin}")
         
         if self.headless:
-            options.add_argument("--headless")
+            options.add_argument("--headless=new")  # Use new headless mode for speed
         
+        # SPEED OPTIMIZED Chrome options for Docker
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-web-security")
+        options.add_argument("--disable-features=VizDisplayCompositor")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-plugins")
+        options.add_argument("--disable-images")  # Don't load images for speed
+        options.add_argument("--disable-javascript")  # Disable JS for faster loading
+        options.add_argument("--window-size=1024,768")  # Smaller window for speed
+        options.add_argument("--page-load-strategy=eager")  # Don't wait for all resources
         options.add_argument(f"--user-agent={self.ua.random}")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -136,25 +151,33 @@ class NotionScraper:
             driver = webdriver.Chrome(service=service, options=options)
         
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        driver.set_page_load_timeout(30)
-        driver.implicitly_wait(10)
+        driver.set_page_load_timeout(15)  # Reduced from 30 for speed
+        driver.implicitly_wait(5)  # Reduced from 10 for speed
         
         logger.info("✅ Docker driver created successfully!")
         return driver
 
     def _create_local_driver(self):
-        """Create a Chrome driver for local development."""
+        """Create a Chrome driver for local development - SPEED OPTIMIZED."""
         logger.info("🖥️ Creating local development driver...")
         
         options = Options()
         
         if self.headless:
-            options.add_argument("--headless")
+            options.add_argument("--headless=new")  # Use new headless mode for speed
         
+        # SPEED OPTIMIZED Chrome options for Local
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-web-security")
+        options.add_argument("--disable-features=VizDisplayCompositor")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-plugins")
+        options.add_argument("--disable-images")  # Don't load images for speed
+        options.add_argument("--disable-javascript")  # Disable JS for faster loading
+        options.add_argument("--window-size=1024,768")  # Smaller window for speed
+        options.add_argument("--page-load-strategy=eager")  # Don't wait for all resources
         options.add_argument(f"--user-agent={self.ua.random}")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -174,8 +197,8 @@ class NotionScraper:
             logger.info("✅ Local driver with system Chrome created!")
         
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        driver.set_page_load_timeout(30)
-        driver.implicitly_wait(10)
+        driver.set_page_load_timeout(15)  # Reduced from 30 for speed
+        driver.implicitly_wait(5)  # Reduced from 10 for speed
         
         return driver
 
@@ -351,7 +374,7 @@ class NotionScraper:
             }
             
             logger.info("Making request to Notion page...")
-            response = requests.get(url, headers=headers, timeout=30)
+            response = requests.get(url, headers=headers, timeout=15)  # Reduced from 30 for speed
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
