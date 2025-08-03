@@ -40,46 +40,81 @@ class Visualizer:
         daily_spending = df.groupby(df['date'].dt.date)['amount'].sum().reset_index()
         daily_spending.columns = ['date', 'amount']
         
-        # Calculate moving average
-        daily_spending['ma_7'] = daily_spending['amount'].rolling(window=7, center=True).mean()
-        daily_spending['ma_30'] = daily_spending['amount'].rolling(window=30, center=True).mean()
+        # Determine appropriate moving averages based on data size
+        num_days = len(daily_spending)
         
         fig = go.Figure()
         
-        # Daily spending
+        # Daily spending (always show as both markers and lines for better visibility)
         fig.add_trace(go.Scatter(
             x=daily_spending['date'],
             y=daily_spending['amount'],
-            mode='markers',
+            mode='lines+markers',
             name='Daily Spending',
-            marker=dict(size=4, color='lightblue', opacity=0.6)
+            marker=dict(size=8, color='#1f77b4'),
+            line=dict(color='#1f77b4', width=3)
         ))
         
-        # 7-day moving average
-        fig.add_trace(go.Scatter(
-            x=daily_spending['date'],
-            y=daily_spending['ma_7'],
-            mode='lines',
-            name='7-Day Average',
-            line=dict(color='orange', width=2)
-        ))
+        # Add moving averages only if we have enough data
+        if num_days >= 3:
+            # Use smaller window for limited data
+            window_size = min(3, num_days)
+            daily_spending['ma_short'] = daily_spending['amount'].rolling(window=window_size, center=True).mean()
+            
+            fig.add_trace(go.Scatter(
+                x=daily_spending['date'],
+                y=daily_spending['ma_short'],
+                mode='lines',
+                name=f'{window_size}-Day Average',
+                line=dict(color='orange', width=2, dash='dash')
+            ))
         
-        # 30-day moving average
-        fig.add_trace(go.Scatter(
-            x=daily_spending['date'],
-            y=daily_spending['ma_30'],
-            mode='lines',
-            name='30-Day Average',
-            line=dict(color='red', width=2)
-        ))
+        # Add 7-day moving average only if we have enough data
+        if num_days >= 7:
+            daily_spending['ma_7'] = daily_spending['amount'].rolling(window=7, center=True).mean()
+            fig.add_trace(go.Scatter(
+                x=daily_spending['date'],
+                y=daily_spending['ma_7'],
+                mode='lines',
+                name='7-Day Average',
+                line=dict(color='green', width=2)
+            ))
+        
+        # Add 30-day moving average only if we have enough data
+        if num_days >= 30:
+            daily_spending['ma_30'] = daily_spending['amount'].rolling(window=30, center=True).mean()
+            fig.add_trace(go.Scatter(
+                x=daily_spending['date'],
+                y=daily_spending['ma_30'],
+                mode='lines',
+                name='30-Day Average',
+                line=dict(color='red', width=2)
+            ))
+        
+        # Update layout with adaptive title
+        title = f'Daily Spending Trend ({num_days} days)'
+        if num_days < 7:
+            title += ' - Limited Data'
         
         fig.update_layout(
-            title='Daily Spending Trend',
+            title=title,
             xaxis_title='Date',
             yaxis_title='Amount ($)',
             height=400,
-            hovermode='x unified'
+            hovermode='x unified',
+            showlegend=True
         )
+        
+        # Add annotation for small datasets
+        if num_days < 7:
+            fig.add_annotation(
+                text=f"Note: Only {num_days} days of data available.<br>Add more data for meaningful trends.",
+                xref="paper", yref="paper",
+                x=0.5, y=0.95, 
+                showarrow=False,
+                font=dict(size=10, color="gray"),
+                align="center"
+            )
         
         return fig
     

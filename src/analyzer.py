@@ -64,6 +64,11 @@ class BillAnalyzer:
         """Analyze spending patterns by day of week."""
         if df is None:
             df = self.df
+        else:
+            # Make a copy and ensure required columns exist
+            df = df.copy()
+            if 'day_of_week' not in df.columns:
+                df['day_of_week'] = pd.to_datetime(df['date']).dt.day_name()
             
         # Define day order
         day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']

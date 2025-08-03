@@ -309,7 +309,7 @@ def show_overview():
     with col1:
         # Monthly spending
         monthly_data = analyzer.get_monthly_spending()
-        fig = px.bar(monthly_data, x='month', y='amount', 
+        fig = px.bar(monthly_data, x='month', y='total_amount', 
                     title="Monthly Spending")
         st.plotly_chart(fig, use_container_width=True)
     

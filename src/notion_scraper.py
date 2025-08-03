@@ -647,8 +647,8 @@ class NotionScraper:
                 if primary_date_col != 'date':
                     df = df.rename(columns={primary_date_col: 'date'})
                 
-                # Clean date column
-                df['date'] = pd.to_datetime(df['date'], errors='coerce', infer_datetime_format=True)
+                # Clean date column - use explicit format to avoid timestamp issues
+                df['date'] = pd.to_datetime(df['date'], errors='coerce', format='%Y-%m-%d')
                 
                 # Remove rows with invalid dates
                 valid_date_mask = ~df['date'].isna()
@@ -671,12 +671,29 @@ class NotionScraper:
             
             # Handle category columns
             category_columns = [col for col in df.columns if 'category' in col.lower()]
+            needs_categorization = True
+            
             if category_columns:
                 # Use first category column as primary
                 primary_cat_col = category_columns[0]
                 if primary_cat_col != 'category':
                     df = df.rename(columns={primary_cat_col: 'category'})
-            else:
+                
+                # Check if existing categories are meaningful (not all 'Other' or empty)
+                if 'category' in df.columns:
+                    unique_categories = df['category'].dropna().unique()
+                    meaningful_categories = [cat for cat in unique_categories if cat not in ['Other', '', 'other', 'OTHER']]
+                    if len(meaningful_categories) > 0:
+                        needs_categorization = False
+                        logger.info(f"Found existing meaningful categories: {meaningful_categories}")
+            
+            # Apply intelligent auto-categorization if needed
+            if needs_categorization and 'description' in df.columns:
+                from .data_processor import DataProcessor
+                processor = DataProcessor()
+                df['category'] = processor.auto_categorize(df['description'])
+                logger.info("Applied intelligent auto-categorization to scraped data")
+            elif needs_categorization:
                 df['category'] = 'Other'
             
             # Add missing columns with defaults
