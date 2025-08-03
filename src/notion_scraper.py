@@ -792,14 +792,24 @@ class NotionDataExtractor:
             filename: Optional filename (auto-generated if not provided)
             
         Returns:
-            str: Path to saved file
+            str: Path to saved file or None if saving failed
         """
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"notion_bills_{timestamp}.csv"
-        
-        filepath = f"data/{filename}"
-        df.to_csv(filepath, index=False)
-        
-        logger.info(f"Saved extracted data to {filepath}")
-        return filepath
+        try:
+            import os
+            
+            # Create data directory if it doesn't exist
+            os.makedirs("data", exist_ok=True)
+            
+            if filename is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"notion_bills_{timestamp}.csv"
+            
+            filepath = f"data/{filename}"
+            df.to_csv(filepath, index=False)
+            
+            logger.info(f"Saved extracted data to {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.warning(f"Could not save extracted data: {e}")
+            return None

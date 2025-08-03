@@ -15,9 +15,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
+import logging
 from typing import Dict, List, Optional, Tuple
 import warnings
 warnings.filterwarnings('ignore')
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Import custom modules
 from src.data_processor import DataProcessor
@@ -144,6 +148,20 @@ def show_data_upload():
                             if not df.empty:
                                 st.success(f"✅ Data scraped successfully! {len(df)} transactions found.")
                                 
+                                # Check data source and show appropriate message
+                                data_source = df.get('_data_source', ['unknown']).iloc[0] if '_data_source' in df.columns else 'unknown'
+                                
+                                if data_source == 'notion':
+                                    st.success(f"✅ Successfully loaded {len(df)} real transactions from Notion!")
+                                elif data_source in ['sample', 'sample_fallback']:
+                                    st.warning("⚠️ Showing sample data - Notion scraping failed. Try the troubleshooting tips below.")
+                                else:
+                                    st.info(f"ℹ️ Loaded {len(df)} transactions")
+                                
+                                # Remove the data source marker before storing
+                                if '_data_source' in df.columns:
+                                    df = df.drop('_data_source', axis=1)
+                                
                                 # Show column information
                                 st.info(f"📊 **Columns detected:** {', '.join(df.columns)}")
                                 
@@ -154,11 +172,17 @@ def show_data_upload():
                                 st.session_state.df = df
                                 st.session_state.data_loaded = True
                                 
-                                # Save scraped data
-                                timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                                filename = f"notion_bills_{timestamp}.csv"
-                                df.to_csv(f"data/{filename}", index=False)
-                                st.info(f"💾 Data saved to: data/{filename}")
+                                # Optionally save scraped data (don't fail if directory doesn't exist)
+                                try:
+                                    import os
+                                    os.makedirs("data", exist_ok=True)
+                                    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                                    filename = f"notion_bills_{timestamp}.csv"
+                                    df.to_csv(f"data/{filename}", index=False)
+                                    st.info(f"💾 Data saved to: data/{filename}")
+                                except Exception as save_error:
+                                    logger.warning(f"Could not save data file: {save_error}")
+                                    # Don't show error to user, saving is optional
                                 
                             else:
                                 st.warning("❌ No data could be extracted from the Notion page.")

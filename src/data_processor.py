@@ -65,15 +65,23 @@ class DataProcessor:
             df = extractor.extract_bill_data(notion_url)
             
             if df.empty:
-                logger.warning("No data extracted from Notion page, creating sample data")
+                logger.warning("❌ No data extracted from Notion page - using sample data")
                 df = self.create_sample_data()
+                # Add a marker to identify sample data
+                df['_data_source'] = 'sample'
+            else:
+                logger.info(f"✅ Successfully extracted {len(df)} transactions from Notion")
+                # Add a marker to identify real data
+                df['_data_source'] = 'notion'
             
             return df
             
         except Exception as e:
-            logger.error(f"Error loading from Notion URL: {e}")
+            logger.error(f"❌ Error loading from Notion URL: {e}")
             logger.info("Creating sample data as fallback")
-            return self.create_sample_data()
+            df = self.create_sample_data()
+            df['_data_source'] = 'sample_fallback'
+            return df
     
     def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
