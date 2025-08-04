@@ -48,10 +48,10 @@ class DataCleanup:
                 for _ in range(600):  # 600 seconds = 10 minutes
                     if not self.running:
                         break
-                    time.sleep(1)
+                    # time.sleep(1)
             except Exception as e:
                 logger.error(f"Error in cleanup loop: {e}")
-                time.sleep(60)  # Wait 1 minute on error
+                # time.sleep(60)  # Wait 1 minute on error
     
     def cleanup_old_files(self):
         """Remove files older than max_age_hours."""

@@ -171,13 +171,13 @@ def show_data_upload():
                         
                         # Small delay to show completion
                         import time
-                        time.sleep(0.3)
+                        # time.sleep(0.3)
                         
                         progress_bar.progress(100)
                         status_text.text("✅ Scraping completed successfully!")
                         
                         # Clean up progress indicators after a brief moment
-                        time.sleep(0.5)
+                        # time.sleep(0.5)
                         progress_bar.empty()
                         status_text.empty()
                         

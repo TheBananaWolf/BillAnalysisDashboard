@@ -233,7 +233,7 @@ class NotionScraper:
         self.driver.get(url)
         
         # Wait for page to load
-        time.sleep(2)
+        # time.sleep(2)
         
         # Wait for content to be present
         wait = WebDriverWait(self.driver, self.timeout)
