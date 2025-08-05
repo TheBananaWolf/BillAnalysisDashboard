@@ -156,7 +156,6 @@ def show_data_upload():
                         progress_bar = st.progress(0)
                         status_text = st.empty()
                         
-                        status_text.text("🚀 Setting up Chrome browser (optimized for speed)...")
                         progress_bar.progress(20)
                         
                         processor = DataProcessor()
@@ -226,7 +225,7 @@ def show_data_upload():
                             st.info(f"📊 **Columns detected:** {', '.join(df.columns)}")
                             
                             # Show data preview
-                            _show_data_preview(df)
+                            # _show_data_preview(df)
                             
                             # Store in session state
                             st.session_state.df = df
@@ -314,8 +313,8 @@ def show_data_upload():
                 st.session_state.df = df
                 st.session_state.data_loaded = True
                 st.success("Sample data loaded!")
-                _show_data_preview(df)
-                st.experimental_rerun()
+                # _show_data_preview(df)
+                # st.experimental_rerun()
     
     with col2:
         st.subheader("💡 Data Format Guide")
