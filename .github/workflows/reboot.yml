@@ -18,6 +18,8 @@ jobs:
 
       - name: Create empty commit
         run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "Github Action"
           git pull
           git commit --allow-empty -m "Empty commit to keep repository active"
           git push
