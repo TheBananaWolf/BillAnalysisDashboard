@@ -287,7 +287,7 @@ class NotionScraper:
                 'Connection': 'keep-alive',
             }
             
-            response = requests.get(url, headers=headers, timeout=15)  # Reduced from 30 for speed
+            response = requests.get(url, headers=headers)  # Reduced from 30 for speed
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -450,7 +450,7 @@ class NotionScraper:
             lines = text_content.split('\n')
             
             current_date = None
-            current_year = "2024"  # Default year
+            current_year = "2025"  # Default year
             
             for line in lines:
                 line = line.strip()
@@ -490,16 +490,16 @@ class NotionScraper:
             # Examples: "一家川菜：59 Food", "Fob Copy：30 T Utilities", "中餐：56 T Food"
             patterns = [
                 # Numbered format with category: "1: description: amount [T] category"
-                r'^\d+[:.：]\s*(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*([A-Za-z]+)\s*$',
+                r'^\d+[:.：]\s*(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*\s*([A-Za-z]+)\s*$',
                 
                 # Direct format with category: "description: amount [T] category"  
-                r'^(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*([A-Za-z]+)\s*$',
+                r'^(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*\s*([A-Za-z]+)\s*$',
                 
                 # Fallback: Numbered format without category: "1: description: amount T"
-                r'^\d+[:.：]\s*(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*$',
+                r'^\d+[:.：]\s*(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*\s*$',
                 
                 # Fallback: Direct format without category: "description: amount T"
-                r'^(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*T?\s*$',
+                r'^(.+?)[:：]\s*(\d+(?:\.\d+)?)\s*\s*$',
                 
                 # Standard patterns for other formats
                 r'(\d{1,2}[/-]\d{1,2}[/-]?\d{2,4})\s+[\$]?(\d+\.?\d*)\s+(.+)',
