@@ -1,13 +1,8 @@
 name: RebootStreamLit
 
-# on:
-#   schedule:
-#     - cron: '0 */10 * * *'  # Runs every 10 hours
-on: 
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+on:
+  schedule:
+    - cron: '0 */10 * * *'  # Runs every 10 hours
 
 jobs:
   empty-commit:
