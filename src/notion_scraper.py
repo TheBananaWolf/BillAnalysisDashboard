@@ -729,18 +729,18 @@ class NotionScraper:
                 valid_date_mask = ~df['date'].isna()
                 df = df[valid_date_mask]
             
-            # Handle multiple description columns (if any)
-            desc_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in ['description', 'desc', 'merchant', 'vendor'])]
+            # Handle multiple description columns (if any) - including 'name' column
+            desc_columns = [col for col in df.columns if any(keyword in col.lower() for keyword in ['description', 'desc', 'merchant', 'vendor', 'name'])]
             if desc_columns:
                 # Use first description column as primary
                 primary_desc_col = desc_columns[0]
                 if primary_desc_col != 'description':
                     df = df.rename(columns={primary_desc_col: 'description'})
                 
-                # Clean description column
-                df['description'] = df['description'].astype(str).str.strip()
-                df = df[df['description'] != '']
-                df = df[df['description'] != 'nan']
+                # Accept any characters in description - minimal cleaning only
+                df['description'] = df['description'].astype(str)
+                df = df[df['description'].str.strip() != '']
+                df = df[~df['description'].isin(['nan', 'null', 'None'])]
             
             # Handle category columns
             category_columns = [col for col in df.columns if 'category' in col.lower()]

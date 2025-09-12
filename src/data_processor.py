@@ -104,7 +104,7 @@ class DataProcessor:
         # Standardize column names
         df.columns = df.columns.str.lower().str.strip()
         
-        # Map common column variations
+        # Map common column variations including your format
         column_mapping = {
             'transaction_date': 'date',
             'trans_date': 'date',
@@ -112,20 +112,30 @@ class DataProcessor:
             'transaction_amount': 'amount',
             'debit': 'amount',
             'credit': 'amount',
+            'price': 'amount',  # Your format uses 'price'
             'transaction_description': 'description',
             'desc': 'description',
             'merchant': 'description',
             'payee': 'description',
+            'name': 'description',  # Your format uses 'name'
             'cat': 'category',
             'expense_category': 'category',
+            'catrory': 'category',  # Handle potential typo in your format
             'account_name': 'account',
             'bank_account': 'account'
         }
         
         df = df.rename(columns=column_mapping)
         
-        # Check for required columns
+        # Check for required columns and handle missing date
         missing_columns = [col for col in self.required_columns if col not in df.columns]
+        
+        # If date is missing, add current date for all transactions
+        if 'date' in missing_columns:
+            logger.info("No date column found, using current date for all transactions")
+            df['date'] = pd.Timestamp.now().date()
+            missing_columns.remove('date')
+        
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
         
@@ -138,8 +148,12 @@ class DataProcessor:
         # Take absolute value for amounts (assuming all are expenses)
         df['amount'] = df['amount'].abs()
         
-        # Clean description
-        df['description'] = df['description'].astype(str).str.strip()
+        # Accept any characters in description - minimal cleaning only
+        df['description'] = df['description'].astype(str)
+        
+        # Only remove entries that are actually null/empty, preserve all other characters
+        df = df[~df['description'].isin(['nan', 'null', 'None', ''])]
+        df = df[df['description'].str.strip() != '']
         
         # Add category if not present
         if 'category' not in df.columns:
@@ -282,16 +296,36 @@ class DataProcessor:
             ]
         }
         
-        # Vectorized pattern matching for better performance
+        # Safe pattern matching that handles any characters in descriptions
         for category, patterns in category_patterns.items():
-            # Combine all patterns for this category into a single regex
-            combined_pattern = '|'.join(f'({pattern})' for pattern in patterns)
-            
-            # Apply pattern to all descriptions at once
-            mask = descriptions_lower.str.contains(combined_pattern, case=False, na=False, regex=True)
-            
-            # Update categories where pattern matches and category is still 'Other'
-            categories.loc[mask & (categories == 'Other')] = category
+            for pattern in patterns:
+                try:
+                    # Try regex matching first
+                    mask = descriptions_lower.str.contains(
+                        pattern, 
+                        case=False, 
+                        na=False, 
+                        regex=True
+                    )
+                    # Update categories where pattern matches and category is still 'Other'
+                    categories.loc[mask & (categories == 'Other')] = category
+                    
+                except Exception:
+                    # If regex fails, use simple substring matching
+                    try:
+                        # Clean the pattern for simple matching
+                        simple_pattern = re.sub(r'[\\^$.*+?{}[\]|()\s]+', '', pattern.lower())
+                        if simple_pattern:  # Only proceed if pattern is not empty after cleaning
+                            mask = descriptions_lower.str.contains(
+                                re.escape(simple_pattern), 
+                                case=False, 
+                                na=False, 
+                                regex=False
+                            )
+                            categories.loc[mask & (categories == 'Other')] = category
+                    except Exception:
+                        # Skip this pattern if it still fails
+                        continue
         
         return categories
     
