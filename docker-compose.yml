@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   bill-analysis:
-    build: .
+    image: bill-analysis:latest
     ports:
       - "8501:8501"
     volumes:

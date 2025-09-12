@@ -28,7 +28,7 @@ from src.data_processor import DataProcessor
 from src.analyzer import BillAnalyzer
 from src.visualizer import Visualizer
 from src.insights_generator import InsightsGenerator
-from src.data_cleanup import start_data_cleanup, get_data_info, manual_cleanup
+# Removed data cleanup functionality
 
 def main():
     """Main Streamlit application"""
@@ -64,19 +64,13 @@ def main():
         st.session_state.data_loaded = False
         st.session_state.df = None
     
-    # Initialize data cleanup (auto-remove files older than 1 hour)
-    if 'cleanup_started' not in st.session_state:
-        try:
-            start_data_cleanup()
-            st.session_state.cleanup_started = True
-        except Exception as e:
-            logger.warning(f"Could not start data cleanup: {e}")
+    # Data cleanup functionality has been removed for better data persistence
     
     # Sidebar
     st.sidebar.header("📊 Navigation")
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["Data Upload", "Data Preview", "Overview", "Spending Analysis", "Category Analysis", "Trends", "Insights", "Export Reports"]
+        ["Data Upload", "Data Preview", "Overview", "Spending Analysis", "Category Analysis", "Category Calculator", "Trends", "Insights", "Export Reports"]
     )
     
     if page == "Data Upload":
@@ -89,6 +83,8 @@ def main():
         show_spending_analysis()
     elif page == "Category Analysis" and st.session_state.data_loaded:
         show_category_analysis()
+    elif page == "Category Calculator" and st.session_state.data_loaded:
+        show_category_calculator()
     elif page == "Trends" and st.session_state.data_loaded:
         show_trends()
     elif page == "Insights" and st.session_state.data_loaded:
@@ -239,7 +235,7 @@ def show_data_upload():
                                 filename = f"notion_bills_{timestamp}.csv"
                                 df.to_csv(f"data/{filename}", index=False)
                                 st.info(f"💾 Data saved to: data/{filename}")
-                                st.caption("🗑️ Files are automatically cleaned up after 1 hour")
+                                st.caption("💾 Data files are now persisted for better analysis")
                             except Exception as save_error:
                                 logger.warning(f"Could not save data file: {save_error}")
                                 # Don't show error to user, saving is optional
@@ -588,6 +584,384 @@ def show_category_analysis():
     if selected_categories:
         category_comparison = analyzer.compare_categories(selected_categories)
         st.plotly_chart(category_comparison, use_container_width=True)
+
+def show_category_calculator():
+    """Advanced Category Calculator with comprehensive analysis tools"""
+    st.header("🧮 Category Calculator")
+    st.markdown("**Comprehensive category spending analysis and calculation tools**")
+    
+    df = st.session_state.df
+    analyzer = BillAnalyzer(df)
+    
+    # Create tabs for different calculation modes
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Basic Calculator", 
+        "📈 Advanced Metrics", 
+        "⚖️ Period Comparison", 
+        "🔮 Predictions"
+    ])
+    
+    with tab1:
+        st.subheader("📊 Basic Category Calculator")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            # Category selection
+            all_categories = sorted(df['category'].unique())
+            selected_categories = st.multiselect(
+                "Select categories to calculate:",
+                options=all_categories,
+                default=all_categories[:5],
+                help="Choose one or more categories to analyze"
+            )
+            
+            # Date range selection
+            min_date = df['date'].min().date()
+            max_date = df['date'].max().date()
+            
+            date_range = st.date_input(
+                "Select date range:",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date,
+                help="Filter transactions by date range"
+            )
+        
+        with col2:
+            # Amount filters
+            min_amount = float(df['amount'].min())
+            max_amount = float(df['amount'].max())
+            
+            amount_range = st.slider(
+                "Amount range ($):",
+                min_value=min_amount,
+                max_value=max_amount,
+                value=(min_amount, max_amount),
+                step=0.01,
+                help="Filter transactions by amount"
+            )
+            
+            # Calculation mode
+            calc_mode = st.selectbox(
+                "Calculation mode:",
+                ["Total Sum", "Average", "Count", "Median", "Standard Deviation"],
+                help="Choose how to calculate the selected categories"
+            )
+        
+        # Perform calculations
+        if selected_categories and len(date_range) == 2:
+            # Filter data
+            start_date, end_date = date_range
+            filtered_df = df[
+                (df['category'].isin(selected_categories)) &
+                (df['date'].dt.date >= start_date) &
+                (df['date'].dt.date <= end_date) &
+                (df['amount'] >= amount_range[0]) &
+                (df['amount'] <= amount_range[1])
+            ]
+            
+            if not filtered_df.empty:
+                st.subheader("📋 Calculation Results")
+                
+                # Calculate metrics for each category
+                results = []
+                for category in selected_categories:
+                    cat_data = filtered_df[filtered_df['category'] == category]
+                    if not cat_data.empty:
+                        if calc_mode == "Total Sum":
+                            value = cat_data['amount'].sum()
+                        elif calc_mode == "Average":
+                            value = cat_data['amount'].mean()
+                        elif calc_mode == "Count":
+                            value = len(cat_data)
+                        elif calc_mode == "Median":
+                            value = cat_data['amount'].median()
+                        elif calc_mode == "Standard Deviation":
+                            value = cat_data['amount'].std()
+                        
+                        results.append({
+                            'Category': category,
+                            calc_mode: round(value, 2) if calc_mode != "Count" else int(value),
+                            'Transactions': len(cat_data),
+                            'Date Range': f"{cat_data['date'].min().strftime('%Y-%m-%d')} to {cat_data['date'].max().strftime('%Y-%m-%d')}"
+                        })
+                
+                if results:
+                    results_df = pd.DataFrame(results)
+                    
+                    # Display results table
+                    st.dataframe(results_df, use_container_width=True)
+                    
+                    # Summary metrics
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        total_value = sum([r[calc_mode] for r in results])
+                        st.metric("Total", f"{total_value:,.2f}" if calc_mode != "Count" else f"{total_value:,}")
+                    
+                    with col2:
+                        avg_value = total_value / len(results) if results else 0
+                        st.metric("Average", f"{avg_value:,.2f}" if calc_mode != "Count" else f"{avg_value:,.0f}")
+                    
+                    with col3:
+                        total_transactions = sum([r['Transactions'] for r in results])
+                        st.metric("Total Transactions", f"{total_transactions:,}")
+                    
+                    with col4:
+                        days_span = (end_date - start_date).days + 1
+                        st.metric("Days Analyzed", f"{days_span:,}")
+                    
+                    # Visualization
+                    if len(results) > 1:
+                        fig = px.bar(
+                            results_df, 
+                            x='Category', 
+                            y=calc_mode,
+                            title=f"{calc_mode} by Category",
+                            color=calc_mode,
+                            color_continuous_scale='viridis'
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("No data found for the selected criteria.")
+    
+    with tab2:
+        st.subheader("📈 Advanced Category Metrics")
+        
+        # Category selection for advanced metrics
+        selected_cats_advanced = st.multiselect(
+            "Select categories for advanced analysis:",
+            options=all_categories,
+            default=all_categories[:3],
+            key="advanced_cats"
+        )
+        
+        # Date range for advanced analysis
+        adv_date_range = st.date_input(
+            "Analysis date range:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            key="advanced_dates"
+        )
+        
+        if selected_cats_advanced and len(adv_date_range) == 2:
+            # Get comprehensive metrics
+            start_dt = pd.to_datetime(adv_date_range[0])
+            end_dt = pd.to_datetime(adv_date_range[1])
+            
+            metrics = analyzer.calculate_category_metrics(
+                selected_categories=selected_cats_advanced,
+                date_range=(start_dt, end_dt)
+            )
+            
+            if 'error' not in metrics:
+                # Display summary
+                st.subheader("📊 Summary Overview")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Spending", f"${metrics['summary']['total_spending']:,.2f}")
+                with col2:
+                    st.metric("Total Transactions", f"{metrics['summary']['total_transactions']:,}")
+                with col3:
+                    st.metric("Categories", f"{metrics['summary']['categories_count']}")
+                with col4:
+                    st.metric("Analysis Days", f"{metrics['summary']['date_range']['days']}")
+                
+                # Detailed category statistics
+                st.subheader("📋 Detailed Category Statistics")
+                category_stats = metrics['category_stats']
+                
+                # Format the dataframe for better display
+                display_stats = category_stats.copy()
+                for col in ['total', 'avg', 'std', 'min', 'max']:
+                    if col in display_stats.columns:
+                        display_stats[col] = display_stats[col].apply(lambda x: f"${x:,.2f}")
+                
+                st.dataframe(display_stats, use_container_width=True)
+                
+                # Monthly trends visualization
+                if not metrics['monthly_trends'].empty:
+                    st.subheader("📈 Monthly Trends")
+                    fig = px.line(
+                        metrics['monthly_trends'],
+                        x='month',
+                        y='amount',
+                        color='category',
+                        title="Monthly Spending Trends by Category",
+                        markers=True
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Weekly patterns
+                if not metrics['weekly_patterns'].empty:
+                    st.subheader("📅 Weekly Spending Patterns")
+                    fig = px.bar(
+                        metrics['weekly_patterns'],
+                        x='day_of_week',
+                        y='amount',
+                        color='category',
+                        title="Average Daily Spending by Category",
+                        barmode='group'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error(metrics['error'])
+    
+    with tab3:
+        st.subheader("⚖️ Period Comparison")
+        
+        # Category selection for comparison
+        comparison_category = st.selectbox(
+            "Select category to compare:",
+            options=all_categories,
+            key="comparison_category"
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Period 1:**")
+            # Calculate safe default period 1 dates
+            period1_end = min(min_date + pd.Timedelta(days=30), max_date)
+            period1_dates = st.date_input(
+                "First period:",
+                value=(min_date, period1_end),
+                min_value=min_date,
+                max_value=max_date,
+                key="period1"
+            )
+        
+        with col2:
+            st.write("**Period 2:**")
+            # Calculate safe default period 2 dates
+            period2_start = max(max_date - pd.Timedelta(days=30), min_date)
+            period2_dates = st.date_input(
+                "Second period:",
+                value=(period2_start, max_date),
+                min_value=min_date,
+                max_value=max_date,
+                key="period2"
+            )
+        
+        if len(period1_dates) == 2 and len(period2_dates) == 2:
+            # Perform comparison
+            period1_dt = (pd.to_datetime(period1_dates[0]), pd.to_datetime(period1_dates[1]))
+            period2_dt = (pd.to_datetime(period2_dates[0]), pd.to_datetime(period2_dates[1]))
+            
+            comparison = analyzer.compare_category_periods(
+                comparison_category, period1_dt, period2_dt
+            )
+            
+            st.subheader(f"📊 Comparison Results for {comparison_category}")
+            
+            # Display comparison metrics
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Total Spending Change",
+                    f"{comparison['changes']['total_change_pct']:+.1f}%",
+                    delta=f"${comparison['period2']['total'] - comparison['period1']['total']:+,.2f}"
+                )
+            
+            with col2:
+                st.metric(
+                    "Transaction Count Change",
+                    f"{comparison['changes']['count_change_pct']:+.1f}%",
+                    delta=f"{comparison['period2']['count'] - comparison['period1']['count']:+d}"
+                )
+            
+            with col3:
+                st.metric(
+                    "Average Amount Change",
+                    f"{comparison['changes']['avg_change_pct']:+.1f}%",
+                    delta=f"${comparison['period2']['avg'] - comparison['period1']['avg']:+,.2f}"
+                )
+            
+            # Detailed comparison table
+            comparison_data = {
+                'Metric': ['Total Spending', 'Transaction Count', 'Average Amount', 'Period Length (days)'],
+                'Period 1': [
+                    f"${comparison['period1']['total']:,.2f}",
+                    comparison['period1']['count'],
+                    f"${comparison['period1']['avg']:,.2f}",
+                    comparison['period1']['days']
+                ],
+                'Period 2': [
+                    f"${comparison['period2']['total']:,.2f}",
+                    comparison['period2']['count'],
+                    f"${comparison['period2']['avg']:,.2f}",
+                    comparison['period2']['days']
+                ]
+            }
+            
+            st.subheader("📋 Detailed Comparison")
+            st.dataframe(pd.DataFrame(comparison_data), use_container_width=True)
+    
+    with tab4:
+        st.subheader("🔮 Category Spending Predictions")
+        
+        # Category selection for predictions
+        prediction_category = st.selectbox(
+            "Select category for prediction:",
+            options=all_categories,
+            key="prediction_category"
+        )
+        
+        months_ahead = st.slider(
+            "Months to predict:",
+            min_value=1,
+            max_value=12,
+            value=3,
+            help="Number of months ahead to predict"
+        )
+        
+        if st.button("Generate Prediction", type="primary"):
+            prediction = analyzer.get_category_predictions(prediction_category, months_ahead)
+            
+            if 'error' not in prediction:
+                st.subheader(f"📈 Predictions for {prediction_category}")
+                
+                # Display prediction metrics
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Historical Average", f"${prediction['historical_avg']:,.2f}")
+                with col2:
+                    trend_direction = "📈" if prediction['trend'] > 0 else "📉" if prediction['trend'] < 0 else "➡️"
+                    st.metric("Monthly Trend", f"{trend_direction} ${prediction['trend']:+,.2f}")
+                with col3:
+                    total_predicted = sum([p['predicted_amount'] for p in prediction['predictions']])
+                    st.metric(f"Total {months_ahead}M Predicted", f"${total_predicted:,.2f}")
+                
+                # Predictions table
+                st.subheader("📅 Monthly Predictions")
+                pred_df = pd.DataFrame(prediction['predictions'])
+                pred_df['predicted_amount'] = pred_df['predicted_amount'].apply(lambda x: f"${x:,.2f}")
+                st.dataframe(pred_df, use_container_width=True)
+                
+                # Visualization
+                pred_viz_df = pd.DataFrame(prediction['predictions'])
+                fig = px.line(
+                    pred_viz_df,
+                    x='month',
+                    y='predicted_amount',
+                    title=f"Predicted Spending for {prediction_category}",
+                    markers=True
+                )
+                fig.update_layout(
+                    xaxis_title="Month",
+                    yaxis_title="Predicted Amount ($)"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Disclaimer
+                st.info("📝 **Note**: Predictions are based on historical trends and should be used as estimates only.")
+            else:
+                st.error(prediction['error'])
 
 def show_trends():
     """Trends analysis page"""

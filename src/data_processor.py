@@ -164,6 +164,7 @@ class DataProcessor:
     def auto_categorize(self, descriptions: pd.Series) -> pd.Series:
         """
         Automatically categorize transactions based on description.
+        Optimized version with improved pattern matching and caching.
         
         Args:
             descriptions: Series of transaction descriptions
@@ -171,80 +172,128 @@ class DataProcessor:
         Returns:
             pd.Series: Categorized transactions
         """
-        categories = []
+        # Use vectorized operations for better performance
+        descriptions_lower = descriptions.astype(str).str.lower().str.strip()
+        categories = pd.Series(['Other'] * len(descriptions), index=descriptions.index)
         
-        # Define category patterns based on user's actual Notion categories
-        # User's categories: Food, Utilities, Grocery, Bank
+        # Optimized category patterns with priority ordering (most specific first)
+        # Enhanced patterns based on user's actual Notion categories: Food, Utilities, Grocery, Bank
         category_patterns = {
             'Food': [
-                r'restaurant', r'cafe', r'coffee', r'food', r'pizza', r'burger',
-                r'mcdonald', r'subway', r'starbucks', r'dining', r'lunch', r'dinner',
-                r'breakfast', r'takeout', r'delivery', r'uber eats', r'doordash',
-                r'grubhub', r'diner', r'bistro', r'kitchen', r'grill', r'bar', r'pub',
-                r'beer', r'wine', r'alcohol', r'drink', r'beverage', r'soda', r'juice',
-                r'tea', r'milk', r'water', r'ice', r'snack', r'bread', r'cake',
-                r'mocha', r'latte', r'espresso', r'cappuccino',
-                # Chinese terms  
+                # Specific brand matches (highest priority)
+                r'\bmcdonald', r'\bsubway\b', r'\bstarbucks', r'\bkfc\b', r'\bpizza hut',
+                r'\bdomino', r'\btaco bell', r'\bburger king', r'\bwendy', 
+                # Delivery services
+                r'uber eats', r'doordash', r'grubhub', r'postmates', r'food panda',
+                # Restaurant types
+                r'restaurant', r'cafe', r'coffee shop', r'diner', r'bistro', r'grill',
+                r'bar', r'pub', r'kitchen', r'bakery', r'pizzeria',
+                # Food categories
+                r'\bfood\b', r'\bpizza\b', r'\bburger', r'\bsushi\b', r'\btaco',
+                r'dining', r'lunch', r'dinner', r'breakfast', r'takeout', r'delivery',
+                # Beverages
+                r'\bbeer\b', r'\bwine\b', r'alcohol', r'\bdrink', r'beverage', r'\bsoda\b',
+                r'\bjuice\b', r'\btea\b', r'\bmilk\b', r'\bwater\b', r'\bice\b',
+                r'mocha', r'latte', r'espresso', r'cappuccino', r'smoothie',
+                # Snacks and desserts
+                r'\bsnack', r'\bbread\b', r'\bcake\b', r'\bcookie', r'\bcandy',
+                # Chinese/Asian terms  
                 r'川菜', r'中餐', r'餐厅', r'饭店', r'咖啡', r'茶', r'酒', r'啤酒',
                 r'食物', r'饮料', r'小吃', r'面包', r'蛋糕', r'奶茶', r'火锅', r'烧烤',
-                # Specific items from user data
-                r'fob', r'fob copy'
+                # User-specific patterns
+                r'\bfob\b', r'fob copy'
             ],
             'Grocery': [
-                r'grocery', r'supermarket', r'walmart', r'target', r'costco',
-                r'whole foods', r'safeway', r'kroger', r'publix', r'trader joe',
-                r'market', r'mart', r'store', r'vegetables', r'fruits', r'meat',
-                r'dairy', r'groceries', r'food store',
-                # Specific items from user data
-                r't and t', r'tnt'
+                # Major grocery chains (specific matches)
+                r'\bwalmart', r'\btarget\b', r'\bcostco', r'whole foods', r'\bsafeway',
+                r'\bkroger', r'\bpublix', r'trader joe', r'\baldi', r'\bwegman',
+                r'\bstop & shop', r'\bfood lion', r'\bharris teeter',
+                # Generic grocery terms
+                r'grocery', r'supermarket', r'\bmarket\b', r'\bmart\b', 
+                r'food store', r'groceries',
+                # Product categories
+                r'vegetables', r'\bfruits\b', r'\bmeat\b', r'\bdairy\b', r'produce',
+                r'\bbread\b', r'\bmilk\b', r'\beggs\b', r'\bcheese\b',
+                # User-specific patterns
+                r't and t', r'\btnt\b', r'\bt&t\b'
             ],
             'Utilities': [
-                r'electric', r'electricity', r'water', r'sewer', r'gas bill',
-                r'internet', r'cable', r'phone', r'mobile', r'utility', r'bill',
-                r'service', r'maintenance', r'repair',
-                # Home & furniture items (user categorizes these as utilities)
-                r'ikea', r'chair', r'desk', r'table', r'bed', r'sofa', r'furniture',
-                r'home', r'house', r'apartment', r'decor', r'lamp', r'shelf',
-                r'cabinet', r'dresser', r'mattress', r'pillow', r'blanket'
+                # Utility services
+                r'\belectric', r'electricity', r'\bwater\b', r'\bsewer\b', r'gas bill',
+                r'\binternet\b', r'\bcable\b', r'\bphone\b', r'\bmobile\b', 
+                r'\butility\b', r'\bbill\b', r'\bservice\b', r'maintenance', r'repair',
+                r'\bheating\b', r'\bcooling\b', r'\bhvac\b', r'\bwifi\b',
+                # Service providers
+                r'\batt\b', r'verizon', r'comcast', r'\bxfinity', r'\bspectrum',
+                r'\bt-mobile', r'sprint', r'\bge\b', r'\bpge\b',
+                # Home & furniture (user categorizes these as utilities)
+                r'\bikea\b', r'\bchair\b', r'\bdesk\b', r'\btable\b', r'\bbed\b', 
+                r'\bsofa\b', r'furniture', r'\bhome depot', r'\blowes\b',
+                r'\bhome\b', r'\bhouse\b', r'apartment', r'\bdecor\b', r'\blamp\b', 
+                r'\bshelf\b', r'cabinet', r'dresser', r'mattress', r'\bpillow\b', 
+                r'\bblanket\b', r'\brug\b', r'\bmirror\b'
             ],
             'Bank': [
-                r'bank', r'atm', r'fee', r'charge', r'interest', r'loan',
-                r'credit card', r'insurance', r'investment', r'transfer', r'payment',
-                r'paypower', r'ppp', r'financial', r'savings', r'credit', r'debt'
+                # Banking terms
+                r'\bbank\b', r'\batm\b', r'\bfee\b', r'\bcharge\b', r'\binterest\b', 
+                r'\bloan\b', r'credit card', r'\binsurance\b', r'investment', 
+                r'\btransfer\b', r'\bpayment\b', r'financial', r'\bsavings\b', 
+                r'\bcredit\b', r'\bdebt\b', r'\bmortgage\b',
+                # Bank names
+                r'chase', r'\bboa\b', r'bank of america', r'\bwells fargo', r'\bciti',
+                r'\busaa\b', r'\bpnc\b', r'\btd bank', r'\bus bank',
+                # User-specific patterns
+                r'paypower', r'\bppp\b', r'\bppe\b',
+                # Financial services
+                r'\bvisa\b', r'mastercard', r'\bamex\b', r'paypal', r'venmo', 
+                r'\bzelle\b', r'\bcashapp\b'
             ],
-            # Additional categories for other transactions
+            # Additional optimized categories
             'Transportation': [
-                r'gas', r'fuel', r'shell', r'exxon', r'chevron', r'bp',
-                r'uber', r'lyft', r'taxi', r'metro', r'bus', r'train',
-                r'parking', r'toll', r'car wash', r'auto'
+                # Gas stations
+                r'\bshell\b', r'\bexxon\b', r'\bchevron\b', r'\bbp\b', r'\bmobil\b',
+                r'\btexaco\b', r'\bsinoco\b', r'\barco\b', r'\b76\b',
+                # Transportation services
+                r'\buber\b', r'\blyft\b', r'\btaxi\b', r'\bmetro\b', r'\bbus\b', 
+                r'\btrain\b', r'\bsubway\b', r'\bart\b', r'\bmta\b',
+                # Vehicle related
+                r'\bgas\b', r'\bfuel\b', r'parking', r'\btoll\b', r'car wash', 
+                r'\bauto\b', r'\bgarage\b', r'\brepair\b', r'\boil change\b'
             ],
             'Shopping': [
-                r'amazon', r'ebay', r'mall', r'shop', r'retail',
-                r'clothing', r'shoes', r'fashion', r'electronics', r'best buy',
-                r'apple store', r'home depot', r'lowes'
+                # Major retailers
+                r'\bamazon\b', r'\bebay\b', r'\bbest buy\b', r'apple store', 
+                r'\bmacy', r'\bnordstrom', r'\bkohl', r'\bjcp', r'\btjx\b',
+                # Shopping categories
+                r'\bmall\b', r'\bshop\b', r'\bretail\b', r'\bstore\b',
+                r'clothing', r'\bshoes\b', r'fashion', r'electronics',
+                r'\bphone\b', r'\btablet\b', r'\blaptop\b'
             ],
             'Entertainment': [
-                r'movie', r'theater', r'cinema', r'netflix', r'spotify',
-                r'game', r'entertainment', r'music', r'concert', r'show',
-                r'club'
+                # Streaming and media
+                r'\bnetflix\b', r'\bspotify\b', r'\bhulu\b', r'\bdisney\b', 
+                r'\bamazon prime', r'\byoutube\b', r'\bapple music',
+                # Entertainment venues
+                r'\bmovie\b', r'\btheater\b', r'\bcinema\b', r'\bconcert\b', 
+                r'\bshow\b', r'\bclub\b', r'\bbar\b', r'\bgym\b',
+                # Gaming and hobbies
+                r'\bgame\b', r'\bsteam\b', r'\bplaystation\b', r'\bxbox\b', 
+                r'entertainment', r'\bmusic\b', r'\bsport\b'
             ]
         }
         
-        for description in descriptions:
-            description_lower = str(description).lower()
-            category = 'Other'
+        # Vectorized pattern matching for better performance
+        for category, patterns in category_patterns.items():
+            # Combine all patterns for this category into a single regex
+            combined_pattern = '|'.join(f'({pattern})' for pattern in patterns)
             
-            for cat, patterns in category_patterns.items():
-                for pattern in patterns:
-                    if re.search(pattern, description_lower):
-                        category = cat
-                        break
-                if category != 'Other':
-                    break
+            # Apply pattern to all descriptions at once
+            mask = descriptions_lower.str.contains(combined_pattern, case=False, na=False, regex=True)
             
-            categories.append(category)
+            # Update categories where pattern matches and category is still 'Other'
+            categories.loc[mask & (categories == 'Other')] = category
         
-        return pd.Series(categories)
+        return categories
     
     def create_sample_data(self, num_transactions: int = 500) -> pd.DataFrame:
         """

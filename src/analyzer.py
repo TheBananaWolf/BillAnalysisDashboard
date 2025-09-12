@@ -13,6 +13,7 @@ from typing import Dict, List, Tuple, Optional
 import calendar
 from functools import lru_cache
 import streamlit as st
+import hashlib
 
 class BillAnalyzer:
     """Main analyzer class for financial data analysis."""
@@ -20,21 +21,35 @@ class BillAnalyzer:
     def __init__(self, df: pd.DataFrame):
         """
         Initialize analyzer with financial data.
+        Optimized version with better performance and caching.
         
         Args:
             df: DataFrame containing financial transactions
         """
         self.df = df.copy()
+        # Optimize date operations by doing them once
         self.df['date'] = pd.to_datetime(self.df['date'])
+        
+        # Create a hash of the dataframe for caching
+        self._df_hash = hashlib.md5(pd.util.hash_pandas_object(self.df).values).hexdigest()
+        
+        # Pre-compute commonly used date fields
+        self._add_date_fields()
+    
+    def _add_date_fields(self):
+        """Add commonly used date fields for better performance."""
         self.df['month'] = self.df['date'].dt.to_period('M')
         self.df['year'] = self.df['date'].dt.year
         self.df['day_of_week'] = self.df['date'].dt.day_name()
         self.df['week'] = self.df['date'].dt.to_period('W')
+        self.df['quarter'] = self.df['date'].dt.quarter
+        self.df['month_name'] = self.df['date'].dt.month_name()
         
-    @st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
+    @st.cache_data(ttl=600, show_spinner=False)  # Cache for 10 minutes
     def get_monthly_spending(_self) -> pd.DataFrame:
-        """Get monthly spending summary."""
-        monthly = _self.df.groupby('month').agg({
+        """Get monthly spending summary with optimized aggregation."""
+        # Use more efficient aggregation
+        monthly = _self.df.groupby('month', observed=True).agg({
             'amount': ['sum', 'mean', 'count'],
             'category': 'nunique'
         }).round(2)
@@ -43,26 +58,196 @@ class BillAnalyzer:
         monthly = monthly.reset_index()
         monthly['month'] = monthly['month'].astype(str)
         
+        # Add growth rate calculation
+        monthly['growth_rate'] = monthly['total_amount'].pct_change() * 100
+        
         return monthly
     
-    @st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
+    @st.cache_data(ttl=600, show_spinner=False)  # Cache for 10 minutes
     def get_category_summary(_self) -> pd.DataFrame:
-        """Get spending summary by category."""
-        category_summary = _self.df.groupby('category').agg({
-            'amount': ['sum', 'mean', 'count', 'std']
+        """Get spending summary by category with enhanced metrics."""
+        # More efficient aggregation with additional metrics
+        category_summary = _self.df.groupby('category', observed=True).agg({
+            'amount': ['sum', 'mean', 'count', 'std', 'min', 'max', 'median']
         }).round(2)
         
-        category_summary.columns = ['amount', 'avg_amount', 'count', 'std_amount']
+        category_summary.columns = ['amount', 'avg_amount', 'count', 'std_amount', 
+                                  'min_amount', 'max_amount', 'median_amount']
         category_summary = category_summary.reset_index()
         
-        # Calculate percentage
+        # Calculate percentage and efficiency metrics
         total_amount = _self.df['amount'].sum()
         category_summary['percentage'] = (category_summary['amount'] / total_amount * 100).round(1)
+        category_summary['coefficient_of_variation'] = (category_summary['std_amount'] / category_summary['avg_amount']).round(2)
         
         # Sort by total amount
         category_summary = category_summary.sort_values('amount', ascending=False)
         
         return category_summary
+    
+    def calculate_category_metrics(self, selected_categories: List[str] = None, 
+                                 date_range: Tuple[datetime, datetime] = None) -> Dict:
+        """
+        Calculate comprehensive metrics for selected categories.
+        
+        Args:
+            selected_categories: List of categories to analyze (None for all)
+            date_range: Tuple of (start_date, end_date) for filtering
+            
+        Returns:
+            Dict: Comprehensive category metrics
+        """
+        df = self.df.copy()
+        
+        # Apply date filter if provided
+        if date_range:
+            start_date, end_date = date_range
+            df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
+        
+        # Apply category filter if provided
+        if selected_categories:
+            df = df[df['category'].isin(selected_categories)]
+        
+        if df.empty:
+            return {"error": "No data found for selected criteria"}
+        
+        # Calculate comprehensive metrics
+        total_spending = df['amount'].sum()
+        total_transactions = len(df)
+        
+        # Category breakdown
+        category_stats = df.groupby('category').agg({
+            'amount': ['sum', 'mean', 'count', 'std', 'min', 'max'],
+            'date': ['min', 'max']
+        }).round(2)
+        
+        category_stats.columns = ['total', 'avg', 'count', 'std', 'min', 'max', 'first_date', 'last_date']
+        category_stats = category_stats.reset_index()
+        
+        # Add percentage and frequency metrics
+        category_stats['percentage'] = (category_stats['total'] / total_spending * 100).round(1)
+        category_stats['frequency'] = (category_stats['count'] / total_transactions * 100).round(1)
+        category_stats['consistency'] = (category_stats['std'] / category_stats['avg']).round(2)
+        
+        # Monthly trends for each category
+        monthly_trends = df.groupby(['category', 'month'])['amount'].sum().reset_index()
+        monthly_trends['month'] = monthly_trends['month'].astype(str)
+        
+        # Weekly patterns
+        weekly_patterns = df.groupby(['category', 'day_of_week'])['amount'].mean().reset_index()
+        
+        return {
+            'summary': {
+                'total_spending': total_spending,
+                'total_transactions': total_transactions,
+                'categories_count': df['category'].nunique(),
+                'date_range': {
+                    'start': df['date'].min(),
+                    'end': df['date'].max(),
+                    'days': (df['date'].max() - df['date'].min()).days
+                }
+            },
+            'category_stats': category_stats,
+            'monthly_trends': monthly_trends,
+            'weekly_patterns': weekly_patterns
+        }
+    
+    def compare_category_periods(self, category: str, period1: Tuple[datetime, datetime], 
+                               period2: Tuple[datetime, datetime]) -> Dict:
+        """
+        Compare spending in a specific category across two time periods.
+        
+        Args:
+            category: Category to compare
+            period1: First period (start_date, end_date)
+            period2: Second period (start_date, end_date)
+            
+        Returns:
+            Dict: Comparison metrics
+        """
+        def get_period_stats(period):
+            start, end = period
+            period_df = self.df[
+                (self.df['date'] >= start) & 
+                (self.df['date'] <= end) & 
+                (self.df['category'] == category)
+            ]
+            
+            if period_df.empty:
+                return {'total': 0, 'count': 0, 'avg': 0, 'days': (end - start).days}
+            
+            return {
+                'total': period_df['amount'].sum(),
+                'count': len(period_df),
+                'avg': period_df['amount'].mean(),
+                'days': (end - start).days
+            }
+        
+        stats1 = get_period_stats(period1)
+        stats2 = get_period_stats(period2)
+        
+        # Calculate changes
+        total_change = ((stats2['total'] - stats1['total']) / max(stats1['total'], 0.01)) * 100
+        count_change = ((stats2['count'] - stats1['count']) / max(stats1['count'], 1)) * 100
+        avg_change = ((stats2['avg'] - stats1['avg']) / max(stats1['avg'], 0.01)) * 100
+        
+        return {
+            'category': category,
+            'period1': stats1,
+            'period2': stats2,
+            'changes': {
+                'total_change_pct': round(total_change, 1),
+                'count_change_pct': round(count_change, 1),
+                'avg_change_pct': round(avg_change, 1)
+            }
+        }
+    
+    def get_category_predictions(self, category: str, months_ahead: int = 3) -> Dict:
+        """
+        Simple prediction for category spending based on historical trends.
+        
+        Args:
+            category: Category to predict
+            months_ahead: Number of months to predict
+            
+        Returns:
+            Dict: Prediction data
+        """
+        category_df = self.df[self.df['category'] == category].copy()
+        
+        if len(category_df) < 3:
+            return {'error': 'Insufficient data for prediction'}
+        
+        # Monthly spending for this category
+        monthly_spending = category_df.groupby('month')['amount'].sum().reset_index()
+        monthly_spending['month_date'] = pd.to_datetime(monthly_spending['month'].astype(str))
+        monthly_spending = monthly_spending.sort_values('month_date')
+        
+        if len(monthly_spending) < 3:
+            return {'error': 'Need at least 3 months of data for prediction'}
+        
+        # Simple trend calculation
+        recent_months = monthly_spending.tail(3)
+        avg_monthly = recent_months['amount'].mean()
+        trend = recent_months['amount'].diff().mean()
+        
+        predictions = []
+        last_date = monthly_spending['month_date'].max()
+        
+        for i in range(1, months_ahead + 1):
+            predicted_amount = max(0, avg_monthly + (trend * i))
+            pred_date = last_date + pd.DateOffset(months=i)
+            predictions.append({
+                'month': pred_date.strftime('%Y-%m'),
+                'predicted_amount': round(predicted_amount, 2)
+            })
+        
+        return {
+            'category': category,
+            'historical_avg': round(avg_monthly, 2),
+            'trend': round(trend, 2),
+            'predictions': predictions
+        }
     
     def get_weekly_patterns(self, df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """Analyze spending patterns by day of week."""
