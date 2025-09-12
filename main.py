@@ -430,37 +430,88 @@ def _get_overview_data(df_hash: str, df_dict: dict) -> tuple:
     return monthly_data, category_data, weekly_patterns
 
 def show_overview():
-    """Overview dashboard page"""
+    """Overview dashboard page with dynamic date range selection"""
     st.header("📊 Financial Overview")
     
     df = st.session_state.df
     
-    # Create a hash of the DataFrame for caching
-    df_hash = str(hash(pd.util.hash_pandas_object(df).sum()))
-    df_dict = df.to_dict('records')
+    # Dynamic date range selector
+    st.subheader("📅 Select Analysis Period")
+    overview_col1, overview_col2 = st.columns([3, 1])
     
-    # Get cached data
+    with overview_col1:
+        analysis_date_range = st.date_input(
+            "Choose date range for analysis:",
+            value=(df['date'].min().date(), df['date'].max().date()),
+            min_value=df['date'].min().date(),
+            max_value=df['date'].max().date(),
+            key="overview_analysis_range",
+            help="Select the time period you want to analyze"
+        )
+    
+    with overview_col2:
+        if st.button("🔄 Reset to Full Period", key="reset_overview_analysis"):
+            # Clear the session state for the date input to reset it
+            if "overview_analysis_range" in st.session_state:
+                del st.session_state["overview_analysis_range"]
+            st.rerun()
+    
+    # Filter data based on selected date range
+    if len(analysis_date_range) == 2:
+        analysis_start, analysis_end = analysis_date_range
+        filtered_df = df[
+            (df['date'].dt.date >= analysis_start) & 
+            (df['date'].dt.date <= analysis_end)
+        ]
+    else:
+        filtered_df = df
+    
+    if len(filtered_df) == 0:
+        st.warning("No data found for the selected date range.")
+        return
+    
+    # Create a hash of the filtered DataFrame for caching
+    df_hash = str(hash(pd.util.hash_pandas_object(filtered_df).sum()))
+    df_dict = filtered_df.to_dict('records')
+    
+    # Get cached data for filtered period
     monthly_data, category_data, weekly_patterns = _get_overview_data(df_hash, df_dict)
     
-    # Key metrics
+    # Key metrics for selected period
+    st.subheader("📈 Key Metrics")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_spent = df['amount'].sum()
-        st.metric("Total Spent", f"${total_spent:,.2f}")
+        total_spent = filtered_df['amount'].sum()
+        full_total = df['amount'].sum()
+        st.metric(
+            "Total Spent", 
+            f"${total_spent:,.2f}",
+            delta=f"${total_spent - full_total:+,.2f}" if total_spent != full_total else None
+        )
     
     with col2:
-        avg_transaction = df['amount'].mean()
+        avg_transaction = filtered_df['amount'].mean()
         st.metric("Avg Transaction", f"${avg_transaction:.2f}")
     
     with col3:
-        num_transactions = len(df)
-        st.metric("Total Transactions", f"{num_transactions:,}")
+        num_transactions = len(filtered_df)
+        full_transactions = len(df)
+        st.metric(
+            "Total Transactions", 
+            f"{num_transactions:,}",
+            delta=f"{num_transactions - full_transactions:+,}" if num_transactions != full_transactions else None
+        )
     
     with col4:
-        days_range = (df['date'].max() - df['date'].min()).days
+        days_range = (filtered_df['date'].max() - filtered_df['date'].min()).days + 1
         daily_avg = total_spent / max(days_range, 1)
         st.metric("Daily Average", f"${daily_avg:.2f}")
+    
+    # Show period information
+    if len(analysis_date_range) == 2:
+        st.info(f"📊 **Analysis Period**: {analysis_start.strftime('%Y-%m-%d')} to {analysis_end.strftime('%Y-%m-%d')} "
+                f"({days_range} days) | **Categories**: {filtered_df['category'].nunique()}")
     
     # Charts
     col1, col2 = st.columns(2)
@@ -1066,40 +1117,98 @@ def show_data_preview_page():
     
     df = st.session_state.df.copy()
     
-    # Data overview metrics
+    # Dynamic Dataset Overview with date range selection
     st.subheader("📈 Dataset Overview")
+    
+    # Date range selector for overview
+    overview_col1, overview_col2 = st.columns([2, 1])
+    
+    with overview_col1:
+        overview_date_range = st.date_input(
+            "📅 Select date range for overview:",
+            value=(df['date'].min().date(), df['date'].max().date()),
+            min_value=df['date'].min().date(),
+            max_value=df['date'].max().date(),
+            key="overview_date_range",
+            help="Choose date range to calculate overview metrics"
+        )
+    
+    with overview_col2:
+        if st.button("🔄 Reset to Full Range", key="reset_overview"):
+            # Clear the session state for the date input to reset it
+            if "overview_date_range" in st.session_state:
+                del st.session_state["overview_date_range"]
+            st.rerun()
+    
+    # Filter data for overview based on selected date range
+    if len(overview_date_range) == 2:
+        overview_start, overview_end = overview_date_range
+        overview_df = df[
+            (df['date'].dt.date >= overview_start) & 
+            (df['date'].dt.date <= overview_end)
+        ]
+    else:
+        overview_df = df
+    
+    # Display dynamic metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total Records", f"{len(df):,}")
+        st.metric(
+            "Total Records", 
+            f"{len(overview_df):,}",
+            delta=f"{len(overview_df) - len(df):+,}" if len(overview_df) != len(df) else None
+        )
     with col2:
-        st.metric("Date Range", f"{(df['date'].max() - df['date'].min()).days} days")
+        if len(overview_df) > 0:
+            days_in_range = (overview_df['date'].max() - overview_df['date'].min()).days + 1
+            st.metric("Date Range", f"{days_in_range} days")
+        else:
+            st.metric("Date Range", "0 days")
     with col3:
-        st.metric("Total Amount", f"${df['amount'].sum():,.2f}")
+        total_amount = overview_df['amount'].sum() if len(overview_df) > 0 else 0
+        full_amount = df['amount'].sum()
+        st.metric(
+            "Total Amount", 
+            f"${total_amount:,.2f}",
+            delta=f"${total_amount - full_amount:+,.2f}" if total_amount != full_amount else None
+        )
     with col4:
-        st.metric("Categories", df['category'].nunique())
+        categories_count = overview_df['category'].nunique() if len(overview_df) > 0 else 0
+        st.metric("Categories", f"{categories_count}")
     
-    # Advanced filtering options
-    st.subheader("🔍 Filter Options")
+    # Show additional insights for selected range
+    if len(overview_df) > 0 and len(overview_date_range) == 2:
+        st.info(f"📊 **Selected Period**: {overview_start.strftime('%Y-%m-%d')} to {overview_end.strftime('%Y-%m-%d')} "
+                f"| **Daily Average**: ${total_amount / max(days_in_range, 1):,.2f} "
+                f"| **Avg Transaction**: ${overview_df['amount'].mean():,.2f}")
+    
+    # Advanced filtering options (using the overview date range from above)
+    st.subheader("🔍 Additional Filter Options")
+    
+    # Use the overview date range as the base filter
+    if len(overview_date_range) == 2:
+        base_filtered_df = overview_df.copy()
+        date_range = overview_date_range
+    else:
+        base_filtered_df = df.copy()
+        date_range = (df['date'].min().date(), df['date'].max().date())
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Date range filter
-        min_date = df['date'].min().date()
-        max_date = df['date'].max().date()
-        date_range = st.date_input(
-            "Date Range:",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            key="preview_date_range"
-        )
+        # Show the active date range (from overview selection)
+        st.info(f"📅 **Active Date Range:**\n{date_range[0]} to {date_range[1]}")
+        st.caption("Date range is controlled by the overview selector above")
     
     with col2:
-        # Category filter - ensure all categories are strings before sorting
-        unique_categories = df['category'].dropna().astype(str).unique().tolist()
-        all_categories = ['All'] + sorted(unique_categories)
+        # Category filter - use categories from the base filtered data
+        if len(base_filtered_df) > 0:
+            unique_categories = base_filtered_df['category'].dropna().astype(str).unique().tolist()
+            all_categories = ['All'] + sorted(unique_categories)
+        else:
+            all_categories = ['All']
+        
         selected_category = st.selectbox(
             "Category:",
             options=all_categories,
@@ -1107,9 +1216,14 @@ def show_data_preview_page():
         )
     
     with col3:
-        # Amount range filter
-        min_amount = float(df['amount'].min())
-        max_amount = float(df['amount'].max())
+        # Amount range filter - use range from base filtered data
+        if len(base_filtered_df) > 0:
+            min_amount = float(base_filtered_df['amount'].min())
+            max_amount = float(base_filtered_df['amount'].max())
+        else:
+            min_amount = 0.0
+            max_amount = 100.0
+            
         amount_range = st.slider(
             "Amount Range ($):",
             min_value=min_amount,
@@ -1119,16 +1233,8 @@ def show_data_preview_page():
             key="preview_amount_range"
         )
     
-    # Apply filters
-    filtered_df = df.copy()
-    
-    # Date filter
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-        filtered_df = filtered_df[
-            (filtered_df['date'].dt.date >= start_date) & 
-            (filtered_df['date'].dt.date <= end_date)
-        ]
+    # Apply additional filters on top of the base filtered data (from overview date range)
+    filtered_df = base_filtered_df.copy()
     
     # Category filter
     if selected_category != 'All':
