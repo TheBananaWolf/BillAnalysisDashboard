@@ -607,8 +607,9 @@ def show_category_calculator():
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            # Category selection
-            all_categories = sorted(df['category'].unique())
+            # Category selection - ensure all categories are strings
+            unique_categories = df['category'].dropna().astype(str).unique().tolist()
+            all_categories = sorted(unique_categories)
             selected_categories = st.multiselect(
                 "Select categories to calculate:",
                 options=all_categories,
@@ -1096,8 +1097,9 @@ def show_data_preview_page():
         )
     
     with col2:
-        # Category filter
-        all_categories = ['All'] + sorted(df['category'].unique().tolist())
+        # Category filter - ensure all categories are strings before sorting
+        unique_categories = df['category'].dropna().astype(str).unique().tolist()
+        all_categories = ['All'] + sorted(unique_categories)
         selected_category = st.selectbox(
             "Category:",
             options=all_categories,

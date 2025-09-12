@@ -159,6 +159,9 @@ class DataProcessor:
         if 'category' not in df.columns:
             df['category'] = self.auto_categorize(df['description'])
         
+        # Ensure all categories are strings
+        df['category'] = df['category'].astype(str).fillna('Other')
+        
         # Add account if not present
         if 'account' not in df.columns:
             df['account'] = 'Main Account'
